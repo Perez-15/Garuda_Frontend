@@ -4,8 +4,13 @@ import { Plus, Workflow as WorkflowIcon, Edit, Trash2, Eye } from 'lucide-react'
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import { workflowService } from '../../services/workflowService';
 import { branchService } from '../../services/branchService';
+import { useAuth } from '../../contexts/AuthContext';
 
 export default function WorkflowsPage() {
+  const { user } = useAuth();
+  const userRole = user?.roles?.[0]?.name;
+  const canManage = userRole === 'super_admin' || userRole === 'hr_admin';
+  
   const navigate = useNavigate();
   const [workflows, setWorkflows] = useState([]);
   const [branches, setBranches] = useState([]);
@@ -92,6 +97,7 @@ export default function WorkflowsPage() {
             <h1 className="text-2xl font-bold text-gray-900">Workflows</h1>
             <p className="text-gray-600">Manage hiring workflows for branches</p>
           </div>
+          {canManage &&(
           <button
             onClick={openNewModal}
             className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700"
@@ -99,6 +105,7 @@ export default function WorkflowsPage() {
             <Plus className="h-5 w-5 mr-2" />
             Add Workflow
           </button>
+          )}
         </div>
 
         {/* Workflows Grid */}

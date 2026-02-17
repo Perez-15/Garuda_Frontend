@@ -109,7 +109,7 @@ export default function ApplicantsPage() {
                 <option value="WordPress">WordPress</option>
                 <option value="Gmail">Gmail</option>
                 <option value="Facebook">Facebook</option>
-                <option value="LinkedIn">LinkedIn</option>
+                <option value="LinkedIn">Boss Jobs</option>
               </select>
             </div>
           </div>

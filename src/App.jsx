@@ -11,6 +11,8 @@ import BranchesPage from './pages/Branches/BranchesPage';
 import WorkflowsPage from './pages/Workflows/WorkflowsPage';
 import WorkflowBuilderPage from './pages/Workflows/WorkflowBuilderPage';
 import ReportsPage from './pages/Reports/ReportsPage';
+import PositionsPage from './pages/Positions/PositionsPage';
+import UsersPage from './pages/Users/UsersPage';
 
 function App() {
   return (
@@ -93,11 +95,30 @@ function App() {
   }
 />
 
+
+<Route
+  path="/users"
+  element={
+    <ProtectedRoute>
+      <UsersPage />
+    </ProtectedRoute>
+  }
+/>
+
 <Route
   path="/reports"
   element={
     <ProtectedRoute>
       <ReportsPage />
+    </ProtectedRoute>
+  }
+/>
+
+<Route
+  path="/positions"
+  element={
+    <ProtectedRoute>
+      <PositionsPage />
     </ProtectedRoute>
   }
 />

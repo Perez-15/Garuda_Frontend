@@ -36,12 +36,12 @@ export const applicantService = {
   },
 
   moveStep: async (id, direction, stepId = null) => {
-    const response = await apiClient.patch(`/applicants/${id}/move-step`, {
-      direction,
-      step_id: stepId,
-    });
+    const payload = { direction };
+    if (stepId) payload.step_id = stepId;
+    
+    const response = await apiClient.patch(`/applicants/${id}/move-step`, payload);
     return response.data;
-  },
+},
 
   updateStatus: async (id, status) => {
     const response = await apiClient.patch(`/applicants/${id}/status`, {

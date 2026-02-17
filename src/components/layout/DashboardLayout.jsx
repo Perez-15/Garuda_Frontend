@@ -1,6 +1,9 @@
 import { useState } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
+import { Briefcase } from 'lucide-react';
+import { Users as UsersIcon } from 'lucide-react';
+import logo from '../../assets/Transparent_garuda.png';
 import {
   LayoutDashboard,
   Users,
@@ -10,7 +13,7 @@ import {
   LogOut,
   Menu,
   X,
-MapPin, 
+  MapPin,
 } from 'lucide-react';
 
 export default function DashboardLayout({ children }) {
@@ -24,16 +27,42 @@ export default function DashboardLayout({ children }) {
     navigate('/login');
   };
 
+  const userRole = user?.roles?.[0]?.name;
+  const isTA = userRole === 'talent_acquisition';
+
   const navigation = [
-  { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-  { name: 'Applicants', href: '/applicants', icon: Users },
-  { name: 'Clients', href: '/clients', icon: Building2 },
-  { name: 'Branches', href: '/branches', icon: MapPin }, 
-  { name: 'Workflows', href: '/workflows', icon: Workflow },
-  { name: 'Reports', href: '/reports', icon: FileText },
-];
+    { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+    { name: 'Positions', href: '/positions', icon: Briefcase },
+    { name: 'Applicants', href: '/applicants', icon: Users },
+    { name: 'Clients', href: '/clients', icon: Building2 },
+    { name: 'Branches', href: '/branches', icon: MapPin },
+
+    ...(!isTA ? [
+      { name: 'Workflows', href: '/workflows', icon: Workflow },
+      { name: 'Reports', href: '/reports', icon: FileText },
+    ] : []),
+
+    ...(userRole === 'super_admin' || userRole === 'hr_admin'
+      ? [{ name: 'Users', href: '/users', icon: UsersIcon }]
+      : []),
+  ];
 
   const isActive = (path) => location.pathname === path;
+
+  // Reusable logo + brand block used in both sidebars
+  const LogoBrand = () => (
+    <div className="flex items-center gap-3">
+      <img
+        src={logo}
+        alt="Garuda HR"
+        className="h-10 w-10 object-contain flex-shrink-0"
+      />
+      <div className="flex flex-col">
+        <span className="text-white font-bold text-sm leading-tight">Garuda HR</span>
+        <span className="text-gray-400 text-xs leading-tight">Recruitment Agency</span>
+      </div>
+    </div>
+  );
 
   return (
     <div className="min-h-screen bg-gray-100">
@@ -41,8 +70,8 @@ export default function DashboardLayout({ children }) {
       <div className="hidden md:flex md:w-64 md:flex-col md:fixed md:inset-y-0">
         <div className="flex-1 flex flex-col min-h-0 bg-gray-900">
           <div className="flex-1 flex flex-col pt-5 pb-4 overflow-y-auto">
-            <div className="flex items-center flex-shrink-0 px-4">
-              <h1 className="text-xl font-bold text-white">Garuda HR</h1>
+            <div className="flex items-center flex-shrink-0 px-4 mb-2">
+              <LogoBrand />
             </div>
             <nav className="mt-5 flex-1 px-2 space-y-1">
               {navigation.map((item) => {
@@ -96,8 +125,8 @@ export default function DashboardLayout({ children }) {
                 </button>
               </div>
               <div className="flex-1 h-0 pt-5 pb-4 overflow-y-auto">
-                <div className="flex-shrink-0 flex items-center px-4">
-                  <h1 className="text-xl font-bold text-white">Garuda HR</h1>
+                <div className="flex-shrink-0 flex items-center px-4 mb-2">
+                  <LogoBrand />
                 </div>
                 <nav className="mt-5 px-2 space-y-1">
                   {navigation.map((item) => {

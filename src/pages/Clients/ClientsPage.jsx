@@ -2,8 +2,13 @@ import { useState, useEffect } from 'react';
 import { Plus, Building2, Edit, Trash2 } from 'lucide-react';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import { clientService } from '../../services/clientService';
+import { useAuth } from '../../contexts/AuthContext';
 
 export default function ClientsPage() {
+  const { user } = useAuth();
+  const userRole = user?.roles?.[0]?.name;
+  const canManage = userRole === 'super_admin' || userRole === 'hr_admin';
+
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -84,6 +89,7 @@ export default function ClientsPage() {
             <h1 className="text-2xl font-bold text-gray-900">Clients</h1>
             <p className="text-gray-600">Manage your client organizations</p>
           </div>
+          {canManage && (
           <button
             onClick={openNewModal}
             className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700"
@@ -91,6 +97,7 @@ export default function ClientsPage() {
             <Plus className="h-5 w-5 mr-2" />
             Add Client
           </button>
+          )}
         </div>
 
         {/* Clients Grid */}
@@ -104,6 +111,7 @@ export default function ClientsPage() {
             <h3 className="mt-2 text-sm font-medium text-gray-900">No clients</h3>
             <p className="mt-1 text-sm text-gray-500">Get started by creating a new client.</p>
             <div className="mt-6">
+              {canManage &&(
               <button
                 onClick={openNewModal}
                 className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
@@ -111,6 +119,7 @@ export default function ClientsPage() {
                 <Plus className="-ml-1 mr-2 h-5 w-5" />
                 New Client
               </button>
+              )}
             </div>
           </div>
         ) : (
@@ -127,7 +136,9 @@ export default function ClientsPage() {
                         <Building2 className="h-6 w-6 text-blue-600" />
                       </div>
                     </div>
+                    {canManage && (
                     <div className="flex space-x-2">
+                      
                       <button
                         onClick={() => handleEdit(client)}
                         className="p-2 text-gray-400 hover:text-blue-600"
@@ -140,7 +151,9 @@ export default function ClientsPage() {
                       >
                         <Trash2 className="h-4 w-4" />
                       </button>
+                      
                     </div>
+                    )}
                   </div>
                   <h3 className="text-lg font-medium text-gray-900 mb-1">{client.name}</h3>
                   {client.type && (

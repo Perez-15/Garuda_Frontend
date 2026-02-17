@@ -28,7 +28,7 @@ export default function AddApplicantPage() {
   const fetchBranches = async () => {
     try {
       const response = await branchService.getAll();
-      setBranches(response.data);
+      setBranches(response.data?.data || response.data || []);
     } catch (error) {
       console.error('Error fetching branches:', error);
     }
@@ -187,7 +187,7 @@ export default function AddApplicantPage() {
                 <option value="WordPress">WordPress</option>
                 <option value="Gmail">Gmail</option>
                 <option value="Facebook">Facebook</option>
-                <option value="LinkedIn">LinkedIn</option>
+                <option value="LinkedIn">Boss Jobs</option>
                 <option value="Walk-in">Walk-in</option>
                 <option value="Referral">Referral</option>
               </select>
