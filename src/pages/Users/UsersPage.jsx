@@ -106,7 +106,7 @@ export default function UsersPage() {
 
   const getRoleLabel = (role) => {
     const labels = {
-      super_admin: 'Super Admin',
+      super_admin: 'Admin',
       hr_admin: 'HR Admin',
       talent_acquisition: 'Talent Acquisition',
     };
@@ -203,7 +203,7 @@ export default function UsersPage() {
                         <button
                           onClick={() => handleToggleStatus(user)}
                           className={`${
-                            user.is_active ? 'text-orange-600' : 'text-green-600'
+                            user.is_active ? 'text-orange-600' : 'text-green-600' 
                           } hover:opacity-80`}
                           disabled={user.roles[0]?.name === 'super_admin' || user.id === currentUser.id}
                         >

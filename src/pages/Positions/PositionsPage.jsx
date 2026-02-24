@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Briefcase, Edit, Trash2, MapPin } from 'lucide-react';
+import { Plus, Briefcase, Edit, Trash2, MapPin, Search } from 'lucide-react';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import { positionService } from '../../services/positionService';
 import { clientService } from '../../services/clientService';
@@ -17,6 +17,13 @@ export default function PositionsPage() {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editingPosition, setEditingPosition] = useState(null);
+
+  // ── Filters ──
+  const [searchFilter, setSearchFilter] = useState('');
+  const [clientFilter, setClientFilter] = useState('');
+  const [branchFilter, setBranchFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
+
   const [formData, setFormData] = useState({
     client_id: '',
     branch_id: '',
@@ -30,6 +37,11 @@ export default function PositionsPage() {
     fetchData();
   }, []);
 
+  // Reset branch filter when client filter changes
+  useEffect(() => {
+    setBranchFilter('');
+  }, [clientFilter]);
+
   const fetchData = async () => {
     try {
       setLoading(true);
@@ -38,9 +50,6 @@ export default function PositionsPage() {
         clientService.getAll(),
         branchService.getAll(),
       ]);
-
-       console.log('Clients response:', clientsRes); // Add this
-      console.log('Branches response:', branchesRes); // Add this
       setPositions(positionsRes.data);
       setClients(clientsRes.data);
       setBranches(branchesRes.data);
@@ -50,6 +59,30 @@ export default function PositionsPage() {
       setLoading(false);
     }
   };
+
+  // ── Filtered positions ──
+  const filteredPositions = positions.filter((position) => {
+    const matchSearch = searchFilter === '' ||
+      position.title.toLowerCase().includes(searchFilter.toLowerCase()) ||
+      position.client?.name?.toLowerCase().includes(searchFilter.toLowerCase());
+
+    const matchClient = clientFilter === '' ||
+      String(position.client_id) === String(clientFilter);
+
+    const matchBranch = branchFilter === '' ||
+      String(position.branch_id) === String(branchFilter);
+
+    const matchStatus = statusFilter === '' ||
+      (statusFilter === 'active' && position.is_active) ||
+      (statusFilter === 'inactive' && !position.is_active);
+
+    return matchSearch && matchClient && matchBranch && matchStatus;
+  });
+
+  // Branches filtered by selected client filter (for filter dropdown)
+  const filteredBranchOptions = clientFilter
+    ? branches.filter((b) => String(b.client_id) === String(clientFilter))
+    : branches;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -99,14 +132,13 @@ export default function PositionsPage() {
     setShowModal(true);
   };
 
-  const getTotalSlots = () => {
-    return positions.reduce((sum, pos) => sum + parseInt(pos.slots), 0);
-  };
+  const getTotalSlots = () => filteredPositions.reduce((sum, pos) => sum + parseInt(pos.slots || 0), 0);
 
   return (
     <DashboardLayout>
       <div className="space-y-6">
-        {/* Header */}
+
+        {/* ── Header ── */}
         <div className="flex justify-between items-center">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Available Positions</h1>
@@ -123,13 +155,16 @@ export default function PositionsPage() {
           )}
         </div>
 
-        {/* Summary Stats */}
+        {/* ── Summary Stats ── */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="bg-white shadow rounded-lg p-6">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600">Total Positions</p>
-                <p className="text-3xl font-bold text-gray-900">{positions.length}</p>
+                <p className="text-3xl font-bold text-gray-900">{filteredPositions.length}</p>
+                {filteredPositions.length !== positions.length && (
+                  <p className="text-xs text-gray-400 mt-1">of {positions.length} total</p>
+                )}
               </div>
               <Briefcase className="h-10 w-10 text-blue-500" />
             </div>
@@ -148,7 +183,7 @@ export default function PositionsPage() {
               <div>
                 <p className="text-sm font-medium text-gray-600">Active Postings</p>
                 <p className="text-3xl font-bold text-gray-900">
-                  {positions.filter(p => p.is_active).length}
+                  {filteredPositions.filter((p) => p.is_active).length}
                 </p>
               </div>
               <Briefcase className="h-10 w-10 text-purple-500" />
@@ -156,17 +191,118 @@ export default function PositionsPage() {
           </div>
         </div>
 
-        {/* Positions Grid */}
+        {/* ── Filters ── */}
+        <div className="bg-white shadow rounded-lg p-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+
+            {/* Search */}
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <Search className="h-4 w-4 text-gray-400" />
+              </div>
+              <input
+                type="text"
+                value={searchFilter}
+                onChange={(e) => setSearchFilter(e.target.value)}
+                placeholder="Search position or client..."
+                className="block w-full pl-9 pr-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+
+            {/* Client Filter */}
+            <select
+              value={clientFilter}
+              onChange={(e) => setClientFilter(e.target.value)}
+              className="block w-full pl-3 pr-10 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+            >
+              <option value="">All Clients</option>
+              {clients.map((client) => (
+                <option key={client.id} value={client.id}>
+                  {client.name}
+                </option>
+              ))}
+            </select>
+
+            {/* Branch Filter */}
+            <select
+              value={branchFilter}
+              onChange={(e) => setBranchFilter(e.target.value)}
+              className="block w-full pl-3 pr-10 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+            >
+              <option value="">All Branches</option>
+              {filteredBranchOptions.map((branch) => (
+                <option key={branch.id} value={branch.id}>
+                  {branch.branch_name}
+                  {!clientFilter && branch.client?.name ? ` — ${branch.client.name}` : ''}
+                </option>
+              ))}
+            </select>
+
+            {/* Status Filter */}
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="block w-full pl-3 pr-10 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+            >
+              <option value="">All Status</option>
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+            </select>
+
+          </div>
+
+          {/* Active filter tags */}
+          {(clientFilter || branchFilter || statusFilter || searchFilter) && (
+            <div className="flex items-center gap-2 mt-3 flex-wrap">
+              <span className="text-xs text-gray-500">Filters:</span>
+              {searchFilter && (
+                <span className="inline-flex items-center gap-1 px-2 py-1 bg-blue-50 text-blue-700 text-xs rounded-full">
+                  "{searchFilter}"
+                  <button onClick={() => setSearchFilter('')} className="hover:text-blue-900">×</button>
+                </span>
+              )}
+              {clientFilter && (
+                <span className="inline-flex items-center gap-1 px-2 py-1 bg-blue-50 text-blue-700 text-xs rounded-full">
+                  {clients.find((c) => String(c.id) === String(clientFilter))?.name}
+                  <button onClick={() => setClientFilter('')} className="hover:text-blue-900">×</button>
+                </span>
+              )}
+              {branchFilter && (
+                <span className="inline-flex items-center gap-1 px-2 py-1 bg-green-50 text-green-700 text-xs rounded-full">
+                  <MapPin className="h-3 w-3" />
+                  {branches.find((b) => String(b.id) === String(branchFilter))?.branch_name}
+                  <button onClick={() => setBranchFilter('')} className="hover:text-green-900">×</button>
+                </span>
+              )}
+              {statusFilter && (
+                <span className="inline-flex items-center gap-1 px-2 py-1 bg-purple-50 text-purple-700 text-xs rounded-full">
+                  {statusFilter}
+                  <button onClick={() => setStatusFilter('')} className="hover:text-purple-900">×</button>
+                </span>
+              )}
+              <button
+                onClick={() => { setSearchFilter(''); setClientFilter(''); setBranchFilter(''); setStatusFilter(''); }}
+                className="text-xs text-gray-400 hover:text-red-500 ml-1"
+              >
+                Clear all
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* ── Positions Grid ── */}
         {loading ? (
           <div className="text-center py-12">
             <div className="text-gray-500">Loading positions...</div>
           </div>
-        ) : positions.length === 0 ? (
+        ) : filteredPositions.length === 0 ? (
           <div className="text-center py-12 bg-white rounded-lg shadow">
             <Briefcase className="mx-auto h-12 w-12 text-gray-400" />
-            <h3 className="mt-2 text-sm font-medium text-gray-900">No positions</h3>
-            <p className="mt-1 text-sm text-gray-500">Get started by adding a position.</p>
-            {canManage && (
+            <h3 className="mt-2 text-sm font-medium text-gray-900">No positions found</h3>
+            <p className="mt-1 text-sm text-gray-500">
+              {positions.length > 0 ? 'Try adjusting your filters.' : 'Get started by adding a position.'}
+            </p>
+            {canManage && positions.length === 0 && (
               <div className="mt-6">
                 <button
                   onClick={openNewModal}
@@ -180,7 +316,7 @@ export default function PositionsPage() {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {positions.map((position) => (
+            {filteredPositions.map((position) => (
               <div
                 key={position.id}
                 className="bg-white shadow rounded-lg overflow-hidden hover:shadow-lg transition"
@@ -231,13 +367,11 @@ export default function PositionsPage() {
                         {position.slots === 1 ? 'slot' : 'slots'}
                       </span>
                     </div>
-                    <span
-                      className={`px-2 py-1 text-xs font-medium rounded-full ${
-                        position.is_active
-                          ? 'bg-green-100 text-green-800'
-                          : 'bg-gray-100 text-gray-800'
-                      }`}
-                    >
+                    <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                      position.is_active
+                        ? 'bg-green-100 text-green-800'
+                        : 'bg-gray-100 text-gray-800'
+                    }`}>
                       {position.is_active ? 'Active' : 'Inactive'}
                     </span>
                   </div>
@@ -247,7 +381,7 @@ export default function PositionsPage() {
           </div>
         )}
 
-        {/* Modal - Only for HR Admin and Super Admin */}
+        {/* ── Modal ── */}
         {showModal && canManage && (
           <div className="fixed z-10 inset-0 overflow-y-auto">
             <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
@@ -255,62 +389,50 @@ export default function PositionsPage() {
                 className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"
                 onClick={() => setShowModal(false)}
               />
-
               <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
                 <form onSubmit={handleSubmit}>
                   <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
                     <h3 className="text-lg font-medium text-gray-900 mb-4">
                       {editingPosition ? 'Edit Position' : 'Add New Position'}
                     </h3>
-
                     <div className="space-y-4">
+
+                      {/* Client */}
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Client *
-                        </label>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Client *</label>
                         <select
                           value={formData.client_id}
-                         onChange={(e) => setFormData({ ...formData, client_id: e.target.value, branch_id: '' })}
+                          onChange={(e) => setFormData({ ...formData, client_id: e.target.value, branch_id: '' })}
                           required
                           className="w-full px-4 py-2 border border-gray-300 rounded-lg"
                         >
                           <option value="">Select a client</option>
                           {clients.map((client) => (
-                            <option key={client.id} value={client.id}>
-                              {client.name}
-                            </option>
+                            <option key={client.id} value={client.id}>{client.name}</option>
                           ))}
                         </select>
                       </div>
 
+                      {/* Branch */}
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Branch (Optional)
-                        </label>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Branch (Optional)</label>
                         <select
                           value={formData.branch_id}
                           onChange={(e) => setFormData({ ...formData, branch_id: e.target.value })}
                           className="w-full px-4 py-2 border border-gray-300 rounded-lg"
                         >
-                           <option value="">All branches</option>
-  {console.log('All branches:', branches)}
-  {console.log('Filtered:', branches.filter(b => String(b.client_id) === String(formData.client_id)))}
-  {console.log('Current client_id:', formData.client_id)}
-  {branches
-    .filter((b) => String(b.client_id) === String(formData.client_id))
-    .map((branch) => (
-      <option key={branch.id} value={branch.id}>
-        {branch.branch_name}
-      </option>
-    ))}
-</select>
-
+                          <option value="">All branches</option>
+                          {branches
+                            .filter((b) => String(b.client_id) === String(formData.client_id))
+                            .map((branch) => (
+                              <option key={branch.id} value={branch.id}>{branch.branch_name}</option>
+                            ))}
+                        </select>
                       </div>
 
+                      {/* Title */}
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Position Title *
-                        </label>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Position Title *</label>
                         <input
                           type="text"
                           value={formData.title}
@@ -321,10 +443,9 @@ export default function PositionsPage() {
                         />
                       </div>
 
+                      {/* Description */}
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Description
-                        </label>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
                         <textarea
                           value={formData.description}
                           onChange={(e) => setFormData({ ...formData, description: e.target.value })}
@@ -334,10 +455,9 @@ export default function PositionsPage() {
                         />
                       </div>
 
+                      {/* Slots */}
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Number of Slots *
-                        </label>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Number of Slots *</label>
                         <input
                           type="number"
                           min="1"
@@ -349,6 +469,7 @@ export default function PositionsPage() {
                         />
                       </div>
 
+                      {/* Active */}
                       <div className="flex items-center">
                         <input
                           type="checkbox"
@@ -358,9 +479,9 @@ export default function PositionsPage() {
                         />
                         <label className="ml-2 block text-sm text-gray-900">Active</label>
                       </div>
+
                     </div>
                   </div>
-
                   <div className="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
                     <button
                       type="submit"
@@ -381,6 +502,7 @@ export default function PositionsPage() {
             </div>
           </div>
         )}
+
       </div>
     </DashboardLayout>
   );

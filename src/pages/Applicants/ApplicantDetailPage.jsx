@@ -6,12 +6,14 @@ import {
   Phone,
   Building2,
   FileText,
-  ChevronRight,
   MessageSquare,
   Trash2,
   CheckCircle2,
-  Circle,
   Loader2,
+  Edit2,
+  X,
+  Save,
+  User,
 } from 'lucide-react';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import { applicantService } from '../../services/applicantService';
@@ -24,6 +26,16 @@ export default function ApplicantDetailPage() {
   const [note, setNote] = useState('');
   const [addingNote, setAddingNote] = useState(false);
   const [movingStep, setMovingStep] = useState(false);
+
+  // ── Edit state ──
+  const [isEditing, setIsEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [editForm, setEditForm] = useState({
+    full_name: '',
+    email: '',
+    phone: '',
+    source: '',
+  });
 
   useEffect(() => {
     fetchApplicant();
@@ -38,6 +50,35 @@ export default function ApplicantDetailPage() {
       console.error('Error fetching applicant:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleEditOpen = () => {
+    setEditForm({
+      full_name: applicant.full_name || '',
+      email:     applicant.email    || '',
+      phone:     applicant.phone    || '',
+      source:    applicant.source   || '',
+    });
+    setIsEditing(true);
+  };
+
+  const handleEditCancel = () => {
+    setIsEditing(false);
+  };
+
+  const handleEditSave = async (e) => {
+    e.preventDefault();
+    try {
+      setSaving(true);
+      await applicantService.update(id, editForm);
+      setIsEditing(false);
+      fetchApplicant();
+    } catch (error) {
+      console.error('Error updating applicant:', error);
+      alert('Failed to update applicant information.');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -112,14 +153,25 @@ export default function ApplicantDetailPage() {
     return colors[status] ?? 'bg-gray-100 text-gray-800';
   };
 
-  // ─── Derived workflow state ───────────────────────────────────────────────
+  const getActivityIcon = (type) => {
+    const icons = {
+      created:      '🟢',
+      updated:      '✏️',
+      step_change:  '➡️',
+      status_change:'🔄',
+      note_added:   '💬',
+    };
+    return icons[type] || '📋';
+  };
+
+  // ─── Derived workflow state ────────────────────────────────────────────────
   const steps = applicant?.workflow?.steps ?? [];
   const currentStep = steps.find((s) => s.id === applicant?.current_step_id);
   const currentOrder = currentStep?.step_order ?? 0;
   const isFirstStep = currentOrder <= 1;
   const isFinalStep = currentStep?.is_final_step ?? false;
 
-  // ─── Loading / not found ──────────────────────────────────────────────────
+  // ─── Loading / not found ───────────────────────────────────────────────────
   if (loading) {
     return (
       <DashboardLayout>
@@ -145,7 +197,7 @@ export default function ApplicantDetailPage() {
     <DashboardLayout>
       <div className="space-y-6">
 
-        {/* Header */}
+        {/* ── Header ── */}
         <div className="flex justify-between items-start">
           <div>
             <button
@@ -176,32 +228,119 @@ export default function ApplicantDetailPage() {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
-          {/* ── Left Column ─────────────────────────────────────────────── */}
+          {/* ── Left Column ──────────────────────────────────────────────── */}
           <div className="lg:col-span-2 space-y-6">
 
             {/* Contact Information */}
             <div className="bg-white shadow rounded-lg p-6">
-              <h3 className="text-lg font-medium text-gray-900 mb-4">Contact Information</h3>
-              <div className="space-y-3">
-                <div className="flex items-center text-gray-600">
-                  <Mail className="h-5 w-5 mr-3 flex-shrink-0" />
-                  <span>{applicant.email || '—'}</span>
-                </div>
-                <div className="flex items-center text-gray-600">
-                  <Phone className="h-5 w-5 mr-3 flex-shrink-0" />
-                  <span>{applicant.phone || '—'}</span>
-                </div>
-                <div className="flex items-center text-gray-600">
-                  <Building2 className="h-5 w-5 mr-3 flex-shrink-0" />
-                  <span>
-                    {applicant.branch?.branch_name} — {applicant.branch?.client?.name}
-                  </span>
-                </div>
-                <div className="flex items-center text-gray-600">
-                  <FileText className="h-5 w-5 mr-3 flex-shrink-0" />
-                  <span>Source: {applicant.source || '—'}</span>
-                </div>
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-medium text-gray-900">Contact Information</h3>
+
+                {/* ── Edit / Save / Cancel buttons ── */}
+                {!isEditing ? (
+                  <button
+                    onClick={handleEditOpen}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-blue-600 border border-blue-300 rounded-lg hover:bg-blue-50 transition"
+                  >
+                    <Edit2 className="h-4 w-4" />
+                    Edit
+                  </button>
+                ) : (
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleEditCancel}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition"
+                    >
+                      <X className="h-4 w-4" />
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleEditSave}
+                      disabled={saving}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition"
+                    >
+                      {saving
+                        ? <Loader2 className="h-4 w-4 animate-spin" />
+                        : <Save className="h-4 w-4" />}
+                      {saving ? 'Saving...' : 'Save'}
+                    </button>
+                  </div>
+                )}
               </div>
+
+              {/* ── View mode ── */}
+              {!isEditing ? (
+                <div className="space-y-3">
+                  <div className="flex items-center text-gray-600">
+                    <Mail className="h-5 w-5 mr-3 flex-shrink-0" />
+                    <span>{applicant.email || '—'}</span>
+                  </div>
+                  <div className="flex items-center text-gray-600">
+                    <Phone className="h-5 w-5 mr-3 flex-shrink-0" />
+                    <span>{applicant.phone || '—'}</span>
+                  </div>
+                  <div className="flex items-center text-gray-600">
+                    <Building2 className="h-5 w-5 mr-3 flex-shrink-0" />
+                    <span>
+                      {applicant.branch?.branch_name} — {applicant.branch?.client?.name}
+                    </span>
+                  </div>
+                  <div className="flex items-center text-gray-600">
+                    <FileText className="h-5 w-5 mr-3 flex-shrink-0" />
+                    <span>Source: {applicant.source || '—'}</span>
+                  </div>
+                </div>
+              ) : (
+                /* ── Edit mode ── */
+                <form onSubmit={handleEditSave} className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
+                    <input
+                      type="text"
+                      value={editForm.full_name}
+                      onChange={(e) => setEditForm({ ...editForm, full_name: e.target.value })}
+                      required
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                    <input
+                      type="email"
+                      value={editForm.email}
+                      onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
+                      required
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+                    <input
+                      type="text"
+                      value={editForm.phone}
+                      onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
+                      required
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Source</label>
+                    <select
+                      value={editForm.source}
+                      onChange={(e) => setEditForm({ ...editForm, source: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                      <option value="">Select source</option>
+                      <option value="WordPress">WordPress</option>
+                      <option value="Gmail">Gmail</option>
+                      <option value="Facebook">Facebook</option>
+                      <option value="BossJobs">Boss Jobs</option>
+                      <option value="Walk-in">Walk-in</option>
+                      <option value="Referral">Referral</option>
+                    </select>
+                  </div>
+                </form>
+              )}
             </div>
 
             {/* Workflow Progress */}
@@ -239,7 +378,6 @@ export default function ApplicantDetailPage() {
                 {steps.map((step, index) => {
                   const isCurrent = step.id === applicant.current_step_id;
                   const isPast    = step.step_order < currentOrder;
-                  const isFuture  = step.step_order > currentOrder;
 
                   return (
                     <div key={step.id} className="flex items-center gap-3">
@@ -258,7 +396,6 @@ export default function ApplicantDetailPage() {
                           <div className={`w-0.5 flex-1 mt-0.5 ${isPast ? 'bg-green-400' : 'bg-gray-200'}`} />
                         )}
                       </div>
-
                       <div className={`py-2 flex-1 ${index !== steps.length - 1 ? 'mb-1' : ''}`}>
                         <p className={`text-sm font-medium ${isCurrent ? 'text-blue-700' : isPast ? 'text-green-700' : 'text-gray-400'}`}>
                           {step.step_name}
@@ -275,7 +412,6 @@ export default function ApplicantDetailPage() {
             {/* Notes Section */}
             <div className="bg-white shadow rounded-lg p-6">
               <h3 className="text-lg font-medium text-gray-900 mb-4">Notes</h3>
-
               <form onSubmit={handleAddNote} className="mb-6">
                 <textarea
                   value={note}
@@ -294,7 +430,6 @@ export default function ApplicantDetailPage() {
                   </button>
                 </div>
               </form>
-
               <div className="space-y-4">
                 {applicant.notes?.length === 0 ? (
                   <p className="text-gray-400 text-center py-4">No notes yet</p>
@@ -303,7 +438,8 @@ export default function ApplicantDetailPage() {
                     <div key={n.id} className="border-l-4 border-blue-400 pl-4 py-2 bg-blue-50 rounded-r-lg">
                       <p className="text-gray-900 text-sm">{n.note}</p>
                       <p className="text-xs text-gray-500 mt-1">
-                        By {n.user?.name} · {new Date(n.created_at).toLocaleString()}
+                        By <span className="font-medium text-gray-700">{n.user?.name || 'Unknown'}</span>
+                        {' '}· {new Date(n.created_at).toLocaleString()}
                       </p>
                     </div>
                   ))
@@ -340,8 +476,6 @@ export default function ApplicantDetailPage() {
                 >
                   ↩ Mark as Withdrawn
                 </button>
-
-                {/* Revert button — only visible when status is not active */}
                 {applicant.status !== 'active' && (
                   <>
                     <hr className="border-gray-200 my-1" />
@@ -365,14 +499,33 @@ export default function ApplicantDetailPage() {
                 ) : (
                   applicant.activities?.slice(0, 10).map((activity) => (
                     <div key={activity.id} className="flex gap-3">
-                      <div className="flex-shrink-0 h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center">
-                        <MessageSquare className="h-4 w-4 text-blue-600" />
+                      {/* Icon */}
+                      <div className="flex-shrink-0 h-8 w-8 rounded-full bg-blue-50 border border-blue-100 flex items-center justify-center text-sm">
+                        {getActivityIcon(activity.activity_type)}
                       </div>
-                      <div className="flex-1">
+
+                      {/* Content */}
+                      <div className="flex-1 min-w-0">
                         <p className="text-sm text-gray-900">{activity.description}</p>
-                        <p className="text-xs text-gray-500 mt-0.5">
-                          {new Date(activity.created_at).toLocaleString()}
-                        </p>
+
+                        {/* ── Who did it + when ── */}
+                        <div className="flex items-center gap-1.5 mt-1">
+                          <User className="h-3 w-3 text-gray-400 flex-shrink-0" />
+                          <span className="text-xs font-medium text-gray-600">
+                            {activity.user?.name || 'Unknown User'}
+                          </span>
+                          <span className="text-xs text-gray-300">·</span>
+                          <span className="text-xs text-gray-400">
+                            {new Date(activity.created_at).toLocaleString()}
+                          </span>
+                        </div>
+
+                        {/* Role badge if available */}
+                        {activity.user?.roles?.[0]?.name && (
+                          <span className="inline-block mt-1 px-1.5 py-0.5 bg-gray-100 text-gray-500 text-xs rounded">
+                            {activity.user.roles[0].name.replace('_', ' ').toUpperCase()}
+                          </span>
+                        )}
                       </div>
                     </div>
                   ))

@@ -187,7 +187,7 @@ export default function AddApplicantPage() {
                 <option value="WordPress">WordPress</option>
                 <option value="Gmail">Gmail</option>
                 <option value="Facebook">Facebook</option>
-                <option value="LinkedIn">Boss Jobs</option>
+                <option value="BossJobs">Boss Jobs</option>
                 <option value="Walk-in">Walk-in</option>
                 <option value="Referral">Referral</option>
               </select>
