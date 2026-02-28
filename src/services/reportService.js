@@ -21,6 +21,11 @@ export const reportService = {
     return response.data;
   },
 
+  topRecruiters: async (params = {}) => {
+    const response = await apiClient.get('/reports/top-recruiters', { params });
+    return response.data;
+  },
+
   export: async (params = {}) => {
     const response = await apiClient.get('/reports/export', { params });
     return response.data;
