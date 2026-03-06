@@ -26,8 +26,11 @@ export const reportService = {
     return response.data;
   },
 
-  export: async (params = {}) => {
-    const response = await apiClient.get('/reports/export', { params });
-    return response.data;
-  },
+ export: async (params = {}) => {
+  const response = await apiClient.get('/reports/export', {
+    params,
+    responseType: 'blob',
+  });
+  return response;
+},
 };

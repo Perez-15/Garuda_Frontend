@@ -25,4 +25,18 @@ export const userService = {
     const response = await apiClient.patch(`/users/${id}/status`, { is_active });
     return response.data;
   },
+
+  // Syncs the branches a TA user is allowed to access
+  // POST /api/v1/users/{userId}/branches
+  // Passing an empty array removes all branch access
+  assignBranches: async (userId, branchIds) => {
+    const response = await apiClient.post(`/users/${userId}/branches`, { branch_ids: branchIds });
+    return response.data;
+  },
+
+  // Get branches assigned to a specific user
+  getAssignedBranches: async (userId) => {
+    const response = await apiClient.get(`/users/${userId}/branches`);
+    return response.data;
+  },
 };

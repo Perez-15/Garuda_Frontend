@@ -89,29 +89,29 @@ export default function WorkflowsPage() {
         {/* Header */}
         <div className="flex justify-between items-center">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Workflows</h1>
-            <p className="text-gray-600">Manage hiring workflows for branches</p>
+            <h1 className="text-2xl font-bold text-gray-900">Hiring Process</h1>
+            <p className="text-gray-600">Manage hiring process for branches</p>
           </div>
           <button
             onClick={openNewModal}
             className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700"
           >
             <Plus className="h-5 w-5 mr-2" />
-            Add Workflow
+            Add Process
           </button>
         </div>
 
         {/* Workflows Grid */}
         {loading ? (
           <div className="text-center py-12">
-            <div className="text-gray-500">Loading workflows...</div>
+            <div className="text-gray-500">Loading process...</div>
           </div>
         ) : workflows.length === 0 ? (
           <div className="text-center py-12 bg-white rounded-lg shadow">
             <WorkflowIcon className="mx-auto h-12 w-12 text-gray-400" />
-            <h3 className="mt-2 text-sm font-medium text-gray-900">No workflows</h3>
+            <h3 className="mt-2 text-sm font-medium text-gray-900">No process</h3>
             <p className="mt-1 text-sm text-gray-500">
-              Get started by creating a new workflow.
+              Get started by creating a new hiring process.
             </p>
             <div className="mt-6">
               <button
@@ -119,7 +119,7 @@ export default function WorkflowsPage() {
                 className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
               >
                 <Plus className="-ml-1 mr-2 h-5 w-5" />
-                New Workflow
+                New Process
               </button>
             </div>
           </div>
@@ -243,7 +243,7 @@ export default function WorkflowsPage() {
 
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Workflow Name *
+                          Process Name *
                         </label>
                         <input
                           type="text"

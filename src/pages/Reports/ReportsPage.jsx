@@ -228,14 +228,21 @@ export default function ReportsPage() {
     }
   };
 
-  const handleExport = async () => {
-    try {
-      await reportService.export({ ...dateRange, ...filters });
-      alert('Export functionality coming soon!');
-    } catch (error) {
-      console.error('Error exporting:', error);
-    }
-  };
+ const handleExport = async () => {
+  try {
+    const response = await reportService.export({ ...dateRange, ...filters });
+
+    const url = window.URL.createObjectURL(new Blob([response.data]));
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', 'recruitment-report.pdf');
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  } catch (error) {
+    console.error('Error exporting:', error);
+  }
+};
 
   // ── Derived metrics ───────────────────────────────────────────────────────────
   const totalApplicants = sourceData.reduce((s, i) => s + parseInt(i.count || 0), 0);
@@ -434,6 +441,7 @@ export default function ReportsPage() {
                     </div>
                     <div>
                       <p className="text-xs text-gray-400 mb-1">Most Hired</p>
+                      
                       <p className="text-sm font-bold text-green-700">
                         {[...recruitersData].sort((a, b) => b.total_hired - a.total_hired)[0]?.name || '—'}
                       </p>

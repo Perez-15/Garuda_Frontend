@@ -11,11 +11,17 @@ export const applicantService = {
     return response.data;
   },
 
+  // Strips only pagination + sort params — all filter params (date, ta_id, etc.) are kept
+  // so stat cards always reflect the same scope as the table
+  getStats: async (params = {}) => {
+    const { page, per_page, sort_by, sort_dir, ...statsParams } = params;
+    const response = await apiClient.get('/applicants/stats', { params: statsParams });
+    return response.data;
+  },
+
   create: async (data) => {
     const response = await apiClient.post('/applicants', data, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
+      headers: { 'Content-Type': 'multipart/form-data' },
     });
     return response.data;
   },
@@ -38,15 +44,12 @@ export const applicantService = {
   moveStep: async (id, direction, stepId = null) => {
     const payload = { direction };
     if (stepId) payload.step_id = stepId;
-    
     const response = await apiClient.patch(`/applicants/${id}/move-step`, payload);
     return response.data;
-},
+  },
 
   updateStatus: async (id, status) => {
-    const response = await apiClient.patch(`/applicants/${id}/status`, {
-      status,
-    });
+    const response = await apiClient.patch(`/applicants/${id}/status`, { status });
     return response.data;
   },
 

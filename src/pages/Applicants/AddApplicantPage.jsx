@@ -4,13 +4,17 @@ import { ArrowLeft } from 'lucide-react';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import { applicantService } from '../../services/applicantService';
 import { branchService } from '../../services/branchService';
+import { useAuth } from '../../contexts/AuthContext';
 
 export default function AddApplicantPage() {
   const navigate = useNavigate();
+  const { user: currentUser } = useAuth();
   const [loading, setLoading] = useState(false);
   const [branches, setBranches] = useState([]);
   const [error, setError] = useState('');
-  
+
+  const isTA = currentUser?.roles?.[0]?.name === 'talent_acquisition';
+
   const [formData, setFormData] = useState({
     full_name: '',
     email: '',
@@ -27,8 +31,15 @@ export default function AddApplicantPage() {
 
   const fetchBranches = async () => {
     try {
-      const response = await branchService.getAll();
-      setBranches(response.data?.data || response.data || []);
+      if (isTA) {
+        // TA: only fetch their assigned branches
+        const response = await branchService.getAssignedBranches(currentUser.id);
+        setBranches(response.branches || []);
+      } else {
+        // Admin / HR Admin: fetch all branches
+        const response = await branchService.getAll();
+        setBranches(response.data?.data || response.data || []);
+      }
     } catch (error) {
       console.error('Error fetching branches:', error);
     }
@@ -36,17 +47,11 @@ export default function AddApplicantPage() {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
+    setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleFileChange = (e) => {
-    setFormData((prev) => ({
-      ...prev,
-      resume: e.target.files[0],
-    }));
+    setFormData((prev) => ({ ...prev, resume: e.target.files[0] }));
   };
 
   const handleSubmit = async (e) => {
@@ -61,12 +66,8 @@ export default function AddApplicantPage() {
       data.append('phone', formData.phone);
       data.append('source', formData.source);
       data.append('branch_id', formData.branch_id);
-      if (formData.resume) {
-        data.append('resume', formData.resume);
-      }
-      if (formData.notes) {
-        data.append('notes', formData.notes);
-      }
+      if (formData.resume) data.append('resume', formData.resume);
+      if (formData.notes) data.append('notes', formData.notes);
 
       await applicantService.create(data);
       navigate('/applicants');
@@ -99,6 +100,13 @@ export default function AddApplicantPage() {
           {error && (
             <div className="mb-4 bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded">
               {error}
+            </div>
+          )}
+
+          {/* Show a warning if TA has no assigned branches yet */}
+          {isTA && branches.length === 0 && (
+            <div className="mb-4 bg-yellow-50 border border-yellow-200 text-yellow-700 px-4 py-3 rounded">
+              You have no branches assigned yet. Please contact your HR Admin to get access.
             </div>
           )}
 
@@ -155,13 +163,19 @@ export default function AddApplicantPage() {
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Branch *
+                {isTA && (
+                  <span className="ml-2 text-xs text-blue-600 font-normal">
+                    (showing your assigned branches only)
+                  </span>
+                )}
               </label>
               <select
                 name="branch_id"
                 value={formData.branch_id}
                 onChange={handleChange}
                 required
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                disabled={isTA && branches.length === 0}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
               >
                 <option value="">Select a branch</option>
                 {branches.map((branch) => (
@@ -205,9 +219,7 @@ export default function AddApplicantPage() {
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
               {formData.resume && (
-                <p className="mt-2 text-sm text-gray-600">
-                  Selected: {formData.resume.name}
-                </p>
+                <p className="mt-2 text-sm text-gray-600">Selected: {formData.resume.name}</p>
               )}
             </div>
 
@@ -237,7 +249,7 @@ export default function AddApplicantPage() {
               </button>
               <button
                 type="submit"
-                disabled={loading}
+                disabled={loading || (isTA && branches.length === 0)}
                 className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {loading ? 'Creating...' : 'Create Applicant'}

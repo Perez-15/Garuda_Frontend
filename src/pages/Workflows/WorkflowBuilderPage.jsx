@@ -139,7 +139,7 @@ export default function WorkflowBuilderPage() {
     return (
       <DashboardLayout>
         <div className="flex items-center justify-center h-64">
-          <div className="text-xl text-gray-600">Loading workflow...</div>
+          <div className="text-xl text-gray-600">Loading process...</div>
         </div>
       </DashboardLayout>
     );
@@ -165,7 +165,7 @@ export default function WorkflowBuilderPage() {
             className="flex items-center text-gray-600 hover:text-gray-900 mb-4"
           >
             <ArrowLeft className="h-5 w-5 mr-2" />
-            Back to Workflows
+            Back 
           </button>
           <div className="flex justify-between items-start">
             <div>
@@ -187,7 +187,7 @@ export default function WorkflowBuilderPage() {
         {/* Workflow Steps */}
         <div className="bg-white shadow rounded-lg p-6">
           <div className="mb-4">
-            <h3 className="text-lg font-medium text-gray-900">Workflow Steps</h3>
+            <h3 className="text-lg font-medium text-gray-900">Process Steps</h3>
             <p className="text-sm text-gray-500">
               Drag and drop to reorder steps. Click to edit.
             </p>

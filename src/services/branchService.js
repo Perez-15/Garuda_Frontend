@@ -25,4 +25,11 @@ export const branchService = {
     const response = await apiClient.delete(`/branches/${id}`);
     return response.data;
   },
+
+  // Returns only the branches assigned to a specific TA user
+  // GET /api/v1/users/{userId}/branches
+  getAssignedBranches: async (userId) => {
+    const response = await apiClient.get(`/users/${userId}/branches`);
+    return response.data;
+  },
 };

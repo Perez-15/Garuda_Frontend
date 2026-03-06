@@ -13,121 +13,58 @@ import WorkflowBuilderPage from './pages/Workflows/WorkflowBuilderPage';
 import ReportsPage from './pages/Reports/ReportsPage';
 import PositionsPage from './pages/Positions/PositionsPage';
 import UsersPage from './pages/Users/UsersPage';
+import InProcessPage from './pages/Applicants/InProcessPage';
+import EmployedPage from './pages/Employees/HiredPage';
+import EmployeeDetailPage from './pages/Employees/Hireddetailpage';
 
 function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
         <Routes>
-          {/* Public Routes */}
+
+          {/* ── Public ─────────────────────────────────────────────────────── */}
           <Route path="/login" element={<LoginPage />} />
 
-          {/* Protected Routes */}
-          <Route
-            path="/dashboard"
-            element={
-              <ProtectedRoute>
-                <Dashboard />
-              </ProtectedRoute>
-            }
-          />
-          
-          <Route
-            path="/applicants"
-            element={
-              <ProtectedRoute>
-                <ApplicantsPage />
-              </ProtectedRoute>
-            }
-          />
+          {/* ── Dashboard ──────────────────────────────────────────────────── */}
+          <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
 
-          <Route
-            path="/applicants/new"
-            element={
-              <ProtectedRoute>
-                <AddApplicantPage />
-              </ProtectedRoute>
-            }
-          />
+          {/* ── Applicants ─────────────────────────────────────────────────── */}
+          <Route path="/applicants"      element={<ProtectedRoute><ApplicantsPage /></ProtectedRoute>} />
+          <Route path="/applicants/new"  element={<ProtectedRoute><AddApplicantPage /></ProtectedRoute>} />
+          <Route path="/applicants/:id"  element={<ProtectedRoute><ApplicantDetailPage /></ProtectedRoute>} />
 
-          <Route
-            path="/applicants/:id"
-            element={
-              <ProtectedRoute>
-                <ApplicantDetailPage />
-              </ProtectedRoute>
-            }
-          />
+          {/* ── In-Process (active applicants filtered view) ────────────────── */}
+          <Route path="/in-process"      element={<ProtectedRoute><InProcessPage /></ProtectedRoute>} />
+          <Route path="/in-process/:id"  element={<ProtectedRoute><ApplicantDetailPage /></ProtectedRoute>} />
 
-          <Route
-            path="/clients"
-            element={
-              <ProtectedRoute>
-                <ClientsPage />
-              </ProtectedRoute>
-            }
-          />
+          {/* ── Employees ──────────────────────────────────────────────────── */}
+          <Route path="/employees"       element={<ProtectedRoute><EmployedPage /></ProtectedRoute>} />
+          <Route path="/employees/:id"   element={<ProtectedRoute><EmployeeDetailPage /></ProtectedRoute>} />
 
-          <Route
-            path="/branches"
-            element={
-              <ProtectedRoute>
-                <BranchesPage />
-              </ProtectedRoute>
-            }
-          />
+          {/* ── Clients ────────────────────────────────────────────────────── */}
+          <Route path="/clients"         element={<ProtectedRoute><ClientsPage /></ProtectedRoute>} />
 
-          <Route
-  path="/workflows"
-  element={
-    <ProtectedRoute>
-      <WorkflowsPage />
-    </ProtectedRoute>
-  }
-/>
+          {/* ── Branches ───────────────────────────────────────────────────── */}
+          <Route path="/branches"        element={<ProtectedRoute><BranchesPage /></ProtectedRoute>} />
 
-<Route
-  path="/workflows/:id"
-  element={
-    <ProtectedRoute>
-      <WorkflowBuilderPage />
-    </ProtectedRoute>
-  }
-/>
+          {/* ── Workflows ──────────────────────────────────────────────────── */}
+          <Route path="/workflows"       element={<ProtectedRoute><WorkflowsPage /></ProtectedRoute>} />
+          <Route path="/workflows/:id"   element={<ProtectedRoute><WorkflowBuilderPage /></ProtectedRoute>} />
 
+          {/* ── Users ──────────────────────────────────────────────────────── */}
+          <Route path="/users"           element={<ProtectedRoute><UsersPage /></ProtectedRoute>} />
 
-<Route
-  path="/users"
-  element={
-    <ProtectedRoute>
-      <UsersPage />
-    </ProtectedRoute>
-  }
-/>
+          {/* ── Reports ────────────────────────────────────────────────────── */}
+          <Route path="/reports"         element={<ProtectedRoute><ReportsPage /></ProtectedRoute>} />
 
-<Route
-  path="/reports"
-  element={
-    <ProtectedRoute>
-      <ReportsPage />
-    </ProtectedRoute>
-  }
-/>
+          {/* ── Positions ──────────────────────────────────────────────────── */}
+          <Route path="/positions"       element={<ProtectedRoute><PositionsPage /></ProtectedRoute>} />
 
-<Route
-  path="/positions"
-  element={
-    <ProtectedRoute>
-      <PositionsPage />
-    </ProtectedRoute>
-  }
-/>
+          {/* ── Fallbacks ──────────────────────────────────────────────────── */}
+          <Route path="/"  element={<Navigate to="/dashboard" replace />} />
+          <Route path="*"  element={<Navigate to="/dashboard" replace />} />
 
-          {/* Redirect root to dashboard */}
-          <Route path="/" element={<Navigate to="/dashboard" replace />} />
-
-          {/* 404 - Redirect to dashboard */}
-          <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>
       </BrowserRouter>
     </AuthProvider>
