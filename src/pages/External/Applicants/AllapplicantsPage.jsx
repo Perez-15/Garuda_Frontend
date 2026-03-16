@@ -4,12 +4,12 @@ import {
   Plus, Search, UserCheck, UserCog, Users, Archive,
   CalendarDays, ClipboardList,
 } from 'lucide-react';
-import DashboardLayout from '../../components/layout/DashboardLayout';
-import { applicantService } from '../../services/applicantService';
-import { employeeService }  from '../../services/employeeService';
-import { branchService }    from '../../services/branchService';
-import { userService }      from '../../services/userService';
-import { useAuth }          from '../../contexts/AuthContext';
+import DashboardLayout from '../../../components/layout/DashboardLayout';
+import { applicantService } from '../../../services/applicantService';
+import { employeeService }  from '../../../services/hiredService';
+import { branchService }    from '../../../services/branchService';
+import { userService }      from '../../../services/userService';
+import { useAuth }          from '../../../contexts/AuthContext';
 
 // ── Status tab config ─────────────────────────────────────────────────────────
 const STATUS_TABS = [
@@ -116,11 +116,13 @@ export default function ApplicantsPage() {
     if (isAdmin) fetchTAUsers();
   }, []);
 
-  useEffect(() => {
-    fetchApplicants();
-    fetchStats();
-  }, [debouncedSearch, activeTab, sourceFilter, branchFilter, sortFilter, taFilter, periodFilter, currentPage, perPage]);
+ useEffect(() => {
+  fetchApplicants();
+}, [debouncedSearch, activeTab, sourceFilter, branchFilter, sortFilter, taFilter, periodFilter, currentPage, perPage]);
 
+useEffect(() => {
+  fetchStats();
+}, [branchFilter]);
   useEffect(() => {
     setCurrentPage(1);
   }, [debouncedSearch, activeTab, sourceFilter, branchFilter, sortFilter, taFilter, periodFilter, perPage]);
@@ -183,19 +185,19 @@ export default function ApplicantsPage() {
     }
   };
 
-  const fetchStats = async () => {
-    try {
-      const aStats = await applicantService.getStats(buildParams());
-      setApplicantStats(aStats);
-
-      const eStats = await employeeService.getStats(
-        branchFilter ? { branch_id: branchFilter } : {}
-      );
-      setEmployeeStats(eStats);
-    } catch (error) {
-      console.error('Error fetching stats:', error);
-    }
-  };
+ const fetchStats = async () => {
+  try {
+    const statsParams = {
+      ...(branchFilter && { branch_id: branchFilter }),
+    };
+    const aStats = await applicantService.getStats(statsParams);
+    setApplicantStats(aStats);
+    const eStats = await employeeService.getStats(statsParams);
+    setEmployeeStats(eStats);
+  } catch (error) {
+    console.error('Error fetching stats:', error);
+  }
+};
 
   const clearAllFilters = () => {
     setSearchInput('');
@@ -250,13 +252,13 @@ export default function ApplicantsPage() {
         {/* ── Stat Cards ── */}
         <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
           <StatCard
-            title="Hired"
-            value={employeeStats?.active}
-            icon={UserCheck}
-            color="green"
-            sub="Active employees"
-            to="/employees"
-          />
+  title="Hired"
+  value={applicantStats?.hired}
+  icon={UserCheck}
+  color="green"
+  sub="Total hired"
+  to="/employees"
+/>
           <StatCard
             title="In-Process"
             value={applicantStats?.in_process}

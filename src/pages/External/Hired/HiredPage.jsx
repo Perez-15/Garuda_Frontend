@@ -2,13 +2,15 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Search, UserCheck, Building2, CalendarDays, ChevronRight,
-  GripVertical, Filter, X, Users,
+  GripVertical, Filter, X, Users, Settings2, Plus, Trash2,
+  Edit2, Save, ChevronUp, ChevronDown, Loader2,
 } from 'lucide-react';
-import DashboardLayout from '../../components/layout/DashboardLayout';
-import { employeeService } from '../../services/employeeService';
-import { branchService } from '../../services/branchService';
-import { userService } from '../../services/userService'; // ← NEW: fetch TA users
-import { useAuth } from '../../contexts/AuthContext';
+import DashboardLayout from '../../../components/layout/DashboardLayout';
+import { employeeService } from '../../../services/hiredService';
+import { branchService } from '../../../services/branchService';
+import { userService } from '../../../services/userService';
+import { customColumnService } from '../../../services/customcolumnService';
+import { useAuth } from '../../../contexts/AuthContext';
 
 // ── Debounce ──────────────────────────────────────────────────────────────────
 function useDebounce(value, delay = 400) {
@@ -82,35 +84,34 @@ function DocBadge({ status }) {
   );
 }
 
-// ── All column definitions ────────────────────────────────────────────────────
-const ALL_COLUMNS = [
-  { key: 'full_name',               label: 'Employee Name',    always: true  },
-  { key: 'employment_status',       label: 'Status',           always: false },
-  { key: 'branch',                  label: 'Branch / Location',always: false },
-  { key: 'position',                label: 'Position',         always: false },
-  { key: 'date_hired',              label: 'Date Hired',       always: false },
-  { key: 'date_resigned',           label: 'Date End',         always: false },
-  { key: 'contact_number',          label: 'Contact No.',      always: false },
-  { key: 'address',                 label: 'Address',          always: false },
-  { key: 'age',                     label: 'Age',              always: false },
-  { key: 'date_of_birth',           label: 'Birthday',         always: false },
-  { key: 'email',                   label: 'Email',            always: false },
-  { key: 'sss',                     label: 'SSS',              always: false },
-  { key: 'pagibig',                 label: 'Pag-IBIG',         always: false },
-  { key: 'philhealth',              label: 'PhilHealth',       always: false },
-  { key: 'tin',                     label: 'TIN',              always: false },
-  { key: 'nbi_status',              label: 'NBI',              always: false },
-  { key: 'medcert_status',          label: 'Medical',          always: false },
-  { key: 'remarks',                 label: 'Remarks',          always: false },
-  { key: 'requirements_status',     label: 'Requirements',     always: false },
-  { key: 'gender',                  label: 'Gender',           always: false },
-  { key: 'civil_status',            label: 'Civil Status',     always: false },
-  { key: 'emergency_contact',       label: 'Emergency Contact',always: false },
-  { key: 'police_clearance_status', label: 'Police Clearance', always: false },
-  { key: 'daily_rate',              label: 'Daily Rate',       always: false },
-  { key: 'hr_actions',              label: 'HR Actions',       always: false },
-  // ── NEW ──
-  { key: 'handled_by',              label: 'Handled By (TA)',  always: false },
+// ── Fixed column definitions ──────────────────────────────────────────────────
+const FIXED_COLUMNS = [
+  { key: 'full_name',               label: 'Employee Name',    always: true,  fixed: true },
+  { key: 'employment_status',       label: 'Status',           always: false, fixed: true },
+  { key: 'branch',                  label: 'Branch / Location',always: false, fixed: true },
+  { key: 'position',                label: 'Position',         always: false, fixed: true },
+  { key: 'date_hired',              label: 'Date Hired',       always: false, fixed: true },
+  { key: 'date_resigned',           label: 'Date End',         always: false, fixed: true },
+  { key: 'contact_number',          label: 'Contact No.',      always: false, fixed: true },
+  { key: 'address',                 label: 'Address',          always: false, fixed: true },
+  { key: 'age',                     label: 'Age',              always: false, fixed: true },
+  { key: 'date_of_birth',           label: 'Birthday',         always: false, fixed: true },
+  { key: 'email',                   label: 'Email',            always: false, fixed: true },
+  { key: 'sss',                     label: 'SSS',              always: false, fixed: true },
+  { key: 'pagibig',                 label: 'Pag-IBIG',         always: false, fixed: true },
+  { key: 'philhealth',              label: 'PhilHealth',       always: false, fixed: true },
+  { key: 'tin',                     label: 'TIN',              always: false, fixed: true },
+  { key: 'nbi_status',              label: 'NBI',              always: false, fixed: true },
+  { key: 'medcert_status',          label: 'Medical',          always: false, fixed: true },
+  { key: 'remarks',                 label: 'Remarks',          always: false, fixed: true },
+  { key: 'requirements_status',     label: 'Requirements',     always: false, fixed: true },
+  { key: 'gender',                  label: 'Gender',           always: false, fixed: true },
+  { key: 'civil_status',            label: 'Civil Status',     always: false, fixed: true },
+  { key: 'emergency_contact',       label: 'Emergency Contact',always: false, fixed: true },
+  { key: 'police_clearance_status', label: 'Police Clearance', always: false, fixed: true },
+  { key: 'daily_rate',              label: 'Daily Rate',       always: false, fixed: true },
+  { key: 'hr_actions',              label: 'HR Actions',       always: false, fixed: true },
+  { key: 'handled_by',              label: 'Handled By (TA)',  always: false, fixed: true },
 ];
 
 const DEFAULT_VISIBLE = [
@@ -163,10 +164,10 @@ function CellValue({ colKey, employee }) {
           )}
         </div>
       );
-    case 'sss':       return <span className="text-sm font-mono text-gray-600">{employee.sss || '—'}</span>;
-    case 'pagibig':   return <span className="text-sm font-mono text-gray-600">{employee.pagibig || '—'}</span>;
-    case 'philhealth':return <span className="text-sm font-mono text-gray-600">{employee.philhealth || '—'}</span>;
-    case 'tin':       return <span className="text-sm font-mono text-gray-600">{employee.tin || '—'}</span>;
+    case 'sss':        return <span className="text-sm font-mono text-gray-600">{employee.sss || '—'}</span>;
+    case 'pagibig':    return <span className="text-sm font-mono text-gray-600">{employee.pagibig || '—'}</span>;
+    case 'philhealth': return <span className="text-sm font-mono text-gray-600">{employee.philhealth || '—'}</span>;
+    case 'tin':        return <span className="text-sm font-mono text-gray-600">{employee.tin || '—'}</span>;
     case 'nbi_status':              return <DocBadge status={employee.nbi_status} />;
     case 'police_clearance_status': return <DocBadge status={employee.police_clearance_status} />;
     case 'medcert_status':          return <DocBadge status={employee.medcert_status} />;
@@ -198,8 +199,6 @@ function CellValue({ colKey, employee }) {
       return employee.daily_rate
         ? <span className="text-sm font-medium text-gray-700">₱{Number(employee.daily_rate).toLocaleString()}</span>
         : <span className="text-gray-300 text-xs">—</span>;
-
-    // ── NEW: show the TA who handled this applicant ───────────────────────────
     case 'handled_by': {
       const ta = employee.handled_by ?? employee.talent_acquisition_officer;
       if (!ta) return <span className="text-gray-300 text-xs">—</span>;
@@ -211,9 +210,195 @@ function CellValue({ colKey, employee }) {
         </div>
       );
     }
-
-    default: return <span className="text-gray-400 text-xs">—</span>;
+    default:
+      if (colKey.startsWith('custom_')) {
+        const fieldKey = colKey.replace('custom_', '');
+        const val = employee.custom_fields?.[fieldKey];
+        return <span className="text-sm text-gray-600">{val || '—'}</span>;
+      }
+      return <span className="text-gray-400 text-xs">—</span>;
   }
+}
+
+// ── Manage Columns Modal ──────────────────────────────────────────────────────
+function ManageColumnsModal({ customCols, onClose, onRefresh }) {
+  const [cols, setCols]           = useState(customCols.map((c) => ({ ...c })));
+  const [newLabel, setNewLabel]   = useState('');
+  const [newType, setNewType]     = useState('text');
+  const [editingId, setEditingId] = useState(null);
+  const [editLabel, setEditLabel] = useState('');
+  const [saving, setSaving]       = useState(false);
+  const [error, setError]         = useState('');
+
+  const handleAdd = async () => {
+    const trimmed = newLabel.trim();
+    if (!trimmed) { setError('Column name is required.'); return; }
+    const field_key = trimmed.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+    if (!field_key) { setError('Invalid column name.'); return; }
+    try {
+      setSaving(true);
+      const res = await customColumnService.create({
+        page: 'hired',
+        field_key,
+        label: trimmed,
+        type: newType,
+        order: cols.length,
+      });
+      if (res.column) {
+        setCols((prev) => [...prev, res.column]);
+        setNewLabel('');
+        setNewType('text');
+        setError('');
+      } else {
+        setError(res.message || 'Failed to add column.');
+      }
+    } catch (e) {
+      setError('Server error. Please try again.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleRename = async (col) => {
+    const trimmed = editLabel.trim();
+    if (!trimmed) { setError('Column name is required.'); return; }
+    try {
+      setSaving(true);
+      await customColumnService.update(col.id, { label: trimmed });
+      setCols((prev) => prev.map((c) => c.id === col.id ? { ...c, label: trimmed } : c));
+      setEditingId(null);
+      setError('');
+    } catch (e) {
+      setError('Failed to rename column.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async (col) => {
+    if (!confirm(`Delete column "${col.label}"? Data for this field will no longer be shown.`)) return;
+    try {
+      await customColumnService.remove(col.id);
+      setCols((prev) => prev.filter((c) => c.id !== col.id));
+    } catch (e) {
+      setError('Failed to delete column.');
+    }
+  };
+
+  const move = async (index, dir) => {
+    const next = [...cols];
+    const target = index + dir;
+    if (target < 0 || target >= next.length) return;
+    [next[index], next[target]] = [next[target], next[index]];
+    setCols(next);
+    await customColumnService.reorder('hired', next.map((c) => c.id));
+  };
+
+  const handleDone = () => { onRefresh(); onClose(); };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" onClick={handleDone} />
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col max-h-[85vh]">
+
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+          <div>
+            <h3 className="text-base font-semibold text-gray-900">Manage Table Columns</h3>
+            <p className="text-xs text-gray-400 mt-0.5">Changes are saved directly to the database</p>
+          </div>
+          <button onClick={handleDone} className="text-gray-400 hover:text-gray-600"><X className="h-5 w-5" /></button>
+        </div>
+
+        {/* Column list */}
+        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-2">
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">Default Columns</p>
+          {FIXED_COLUMNS.map((col) => (
+            <div key={col.key} className="flex items-center gap-2 p-2.5 rounded-lg border border-gray-100 bg-gray-50">
+              <GripVertical className="h-4 w-4 text-gray-200 flex-shrink-0" />
+              <span className="flex-1 text-sm text-gray-500">{col.label}</span>
+              <span className="text-xs text-gray-300 bg-gray-100 px-2 py-0.5 rounded">fixed</span>
+            </div>
+          ))}
+
+          {cols.length > 0 && (
+            <>
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mt-4 mb-1">Custom Columns</p>
+              {cols.map((col, index) => (
+                <div key={col.id} className="flex items-center gap-2 p-2.5 rounded-lg border border-blue-100 bg-blue-50 group">
+                  <div className="flex flex-col gap-0.5">
+                    <button onClick={() => move(index, -1)} disabled={index === 0}
+                      className="text-gray-300 hover:text-gray-600 disabled:opacity-20"><ChevronUp className="h-3 w-3" /></button>
+                    <button onClick={() => move(index, 1)} disabled={index === cols.length - 1}
+                      className="text-gray-300 hover:text-gray-600 disabled:opacity-20"><ChevronDown className="h-3 w-3" /></button>
+                  </div>
+                  <GripVertical className="h-4 w-4 text-blue-200 flex-shrink-0" />
+                  {editingId === col.id ? (
+                    <input autoFocus value={editLabel}
+                      onChange={(e) => setEditLabel(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') handleRename(col); if (e.key === 'Escape') setEditingId(null); }}
+                      className="flex-1 px-2 py-1 text-sm border border-blue-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  ) : (
+                    <span className="flex-1 text-sm text-gray-700">
+                      {col.label} <span className="text-xs text-blue-400">({col.type})</span>
+                    </span>
+                  )}
+                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    {editingId === col.id ? (
+                      <>
+                        <button onClick={() => handleRename(col)} disabled={saving}
+                          className="p-1 text-green-600 hover:bg-green-50 rounded"><Save className="h-3.5 w-3.5" /></button>
+                        <button onClick={() => setEditingId(null)}
+                          className="p-1 text-gray-400 hover:bg-gray-100 rounded"><X className="h-3.5 w-3.5" /></button>
+                      </>
+                    ) : (
+                      <>
+                        <button onClick={() => { setEditingId(col.id); setEditLabel(col.label); setError(''); }}
+                          className="p-1 text-blue-500 hover:bg-blue-100 rounded"><Edit2 className="h-3.5 w-3.5" /></button>
+                        <button onClick={() => handleDelete(col)}
+                          className="p-1 text-red-400 hover:bg-red-50 rounded"><Trash2 className="h-3.5 w-3.5" /></button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </>
+          )}
+        </div>
+
+        {/* Add new column */}
+        <div className="px-6 py-4 border-t border-gray-100 space-y-3">
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Add New Column</p>
+          <div className="flex gap-2">
+            <input value={newLabel}
+              onChange={(e) => { setNewLabel(e.target.value); setError(''); }}
+              onKeyDown={(e) => { if (e.key === 'Enter') handleAdd(); }}
+              placeholder="e.g. Allowance, Shift, Notes..."
+              className="flex-1 px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            <select value={newType} onChange={(e) => setNewType(e.target.value)}
+              className="px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+              <option value="text">Text</option>
+              <option value="number">Number</option>
+              <option value="date">Date</option>
+            </select>
+          </div>
+          <button onClick={handleAdd} disabled={saving}
+            className="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-medium text-white bg-gray-900 rounded-lg hover:bg-gray-800 disabled:opacity-50 transition-colors">
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+            Add Column to Database
+          </button>
+          {error && <p className="text-xs text-red-500">{error}</p>}
+        </div>
+
+        <div className="flex justify-end px-6 py-4 border-t border-gray-100">
+          <button onClick={handleDone}
+            className="px-5 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors">
+            Done
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -224,7 +409,8 @@ export default function HiredPage() {
 
   const [employees,   setEmployees]   = useState([]);
   const [branches,    setBranches]    = useState([]);
-  const [taUsers,     setTaUsers]     = useState([]);   // ← NEW
+  const [taUsers,     setTaUsers]     = useState([]);
+  const [customCols,  setCustomCols]  = useState([]);
   const [stats,       setStats]       = useState(null);
   const [loading,     setLoading]     = useState(true);
   const [total,       setTotal]       = useState(0);
@@ -232,46 +418,36 @@ export default function HiredPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [perPage,     setPerPage]     = useState(15);
 
-  // ── Filters ──────────────────────────────────────────────────────────────
-  const [activeTab,    setActiveTab]   = useState('active');
-  const [searchInput,  setSearchInput] = useState('');
-  const debouncedSearch                = useDebounce(searchInput, 400);
-  const [branchFilter, setBranchFilter]= useState('');
-  const [reqFilter,    setReqFilter]   = useState('');
-  const [taFilter,     setTaFilter]    = useState('');  // ← NEW
+  // ── Filters ───────────────────────────────────────────────────────────────
+  const [activeTab,    setActiveTab]    = useState('active');
+  const [searchInput,  setSearchInput]  = useState('');
+  const debouncedSearch                 = useDebounce(searchInput, 400);
+  const [branchFilter, setBranchFilter] = useState('');
+  const [reqFilter,    setReqFilter]    = useState('');
+  const [taFilter,     setTaFilter]     = useState('');
 
   // ── Column management ─────────────────────────────────────────────────────
-  const [visibleCols,   setVisibleCols]  = useState(DEFAULT_VISIBLE);
-  const [colOrder,      setColOrder]     = useState(DEFAULT_VISIBLE);
-  const [showColPicker, setShowColPicker]= useState(false);
+  const [visibleCols,    setVisibleCols]    = useState(DEFAULT_VISIBLE);
+  const [colOrder,       setColOrder]       = useState(DEFAULT_VISIBLE);
+  const [showColPicker,  setShowColPicker]  = useState(false);
+  const [showManageCols, setShowManageCols] = useState(false);
 
   // ── Drag state ────────────────────────────────────────────────────────────
   const dragCol     = useRef(null);
   const dragOverCol = useRef(null);
+  const [dragOverKey, setDragOverKey] = useState(null);
+  const [dragKey,     setDragKey]     = useState(null);
 
-  const userRole = currentUser?.roles?.[0]?.name;
-  const isTA     = userRole === 'talent_acquisition';
-  // HR and Admin can see the TA filter; TAs only see their own records anyway
+  const userRole      = currentUser?.roles?.[0]?.name;
+  const isTA          = userRole === 'talent_acquisition';
   const canFilterByTA = !isTA;
 
   // ── Boot ──────────────────────────────────────────────────────────────────
-  useEffect(() => { fetchBranches(); }, []);
-
-  // ── NEW: load TA users once (only for HR/Admin) ───────────────────────────
-  useEffect(() => {
-    if (!canFilterByTA) return;
-    fetchTaUsers();
-  }, [canFilterByTA]);
-
+  useEffect(() => { fetchBranches(); fetchCustomCols(); }, []);
+  useEffect(() => { if (!canFilterByTA) return; fetchTaUsers(); }, [canFilterByTA]);
   useEffect(() => { fetchStats(); }, [branchFilter]);
-
-  useEffect(() => {
-    fetchEmployees();
-  }, [debouncedSearch, activeTab, branchFilter, reqFilter, taFilter, currentPage, perPage]);
-
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [debouncedSearch, activeTab, branchFilter, reqFilter, taFilter, perPage]);
+  useEffect(() => { fetchEmployees(); }, [debouncedSearch, activeTab, branchFilter, reqFilter, taFilter, currentPage, perPage]);
+  useEffect(() => { setCurrentPage(1); }, [debouncedSearch, activeTab, branchFilter, reqFilter, taFilter, perPage]);
 
   // ── Data fetchers ─────────────────────────────────────────────────────────
   const fetchBranches = async () => {
@@ -283,20 +459,18 @@ export default function HiredPage() {
     } catch (e) { console.error(e); }
   };
 
-  // NEW ─────────────────────────────────────────────────────────────────────
-  // Fetch all users who have the talent_acquisition role so HR/Admin can
-  // select them from the dropdown.
-  //
-  // Adjust the service call to match your actual API.
-  // Common patterns:
-  //   userService.getByRole('talent_acquisition')
-  //   userService.getAll({ role: 'talent_acquisition' })
   const fetchTaUsers = async () => {
     try {
-      const res = await userService.getByRole('talent_acquisition');
-      // Normalise – most APIs return { data: [...] } or a plain array
-      setTaUsers(res.data ?? res);
+      const res = await userService.getAll({ role: 'talent_acquisition' });
+      setTaUsers(res.data || []);
     } catch (e) { console.error('Could not load TA users:', e); }
+  };
+
+  const fetchCustomCols = async () => {
+    try {
+      const res = await customColumnService.getByPage('hired');
+      setCustomCols(Array.isArray(res) ? res : []);
+    } catch (e) { console.error('Could not load custom columns:', e); }
   };
 
   const fetchStats = async () => {
@@ -318,7 +492,6 @@ export default function HiredPage() {
         ...(activeTab && activeTab !== 'active' && { status: activeTab }),
         ...(branchFilter && { branch_id: branchFilter }),
         ...(reqFilter    && { requirements_status: reqFilter }),
-        // ── NEW: pass ta_id so the backend can filter ──────────────────────
         ...(taFilter     && { ta_id: taFilter }),
       };
       const res = await employeeService.getAll(params);
@@ -329,9 +502,21 @@ export default function HiredPage() {
     finally { setLoading(false); }
   };
 
-  // ── Column management ─────────────────────────────────────────────────────
+  // ── Build full column list (fixed + custom) ───────────────────────────────
+  const allColumnsWithCustom = [
+    ...FIXED_COLUMNS,
+    ...customCols.map((c) => ({
+      key:    `custom_${c.field_key}`,
+      label:  c.label,
+      always: false,
+      fixed:  false,
+      custom: true,
+    })),
+  ];
+
+  // ── Column toggle ─────────────────────────────────────────────────────────
   const toggleColumn = (key) => {
-    const col = ALL_COLUMNS.find((c) => c.key === key);
+    const col = allColumnsWithCustom.find((c) => c.key === key);
     if (col?.always) return;
     if (visibleCols.includes(key)) {
       setVisibleCols((v) => v.filter((k) => k !== key));
@@ -343,10 +528,27 @@ export default function HiredPage() {
   };
 
   // ── Drag handlers ─────────────────────────────────────────────────────────
-  const onDragStart = (key) => { dragCol.current = key; };
-  const onDragEnter = (key) => { dragOverCol.current = key; };
-  const onDragEnd   = () => {
-    if (!dragCol.current || !dragOverCol.current || dragCol.current === dragOverCol.current) return;
+  const onDragStart = (key) => {
+    dragCol.current = key;
+    setDragKey(key);
+  };
+
+  const onDragEnter = (key) => {
+    dragOverCol.current = key;
+    setDragOverKey(key);
+  };
+
+  const onDragEnd = () => {
+    // Always clear visual state FIRST — fixes stuck blue highlight bug
+    setDragOverKey(null);
+    setDragKey(null);
+
+    // Then reorder if the drop was valid
+    if (!dragCol.current || !dragOverCol.current || dragCol.current === dragOverCol.current) {
+      dragCol.current     = null;
+      dragOverCol.current = null;
+      return;
+    }
     const newOrder = [...colOrder];
     const from = newOrder.indexOf(dragCol.current);
     const to   = newOrder.indexOf(dragOverCol.current);
@@ -357,23 +559,25 @@ export default function HiredPage() {
     dragOverCol.current = null;
   };
 
+  // ── Derived ───────────────────────────────────────────────────────────────
   const activeColumns = colOrder.filter((k) => visibleCols.includes(k));
 
   const clearFilters = () => {
     setSearchInput('');
     setBranchFilter('');
     setReqFilter('');
-    setTaFilter('');   // ← also clear TA filter
+    setTaFilter('');
     setCurrentPage(1);
   };
 
   const hasFilters = searchInput || branchFilter || reqFilter || taFilter;
 
+  // ── Render ────────────────────────────────────────────────────────────────
   return (
     <DashboardLayout>
       <div className="space-y-5">
 
-        {/* ── Header ────────────────────────────────────────────────────── */}
+        {/* ── Header ──────────────────────────────────────────────────────── */}
         <div className="flex items-start justify-between">
           <div>
             <div className="flex items-center gap-2">
@@ -389,9 +593,15 @@ export default function HiredPage() {
               )}
             </p>
           </div>
+          <button
+            onClick={() => setShowManageCols(true)}
+            className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors shadow-sm"
+          >
+            <Settings2 className="h-4 w-4" /> Manage Columns
+          </button>
         </div>
 
-        {/* ── Tabs ──────────────────────────────────────────────────────── */}
+        {/* ── Status Tabs ─────────────────────────────────────────────────── */}
         <div className="flex items-center gap-1 bg-white rounded-xl border border-gray-100 shadow-sm p-1 overflow-x-auto">
           {STATUS_TABS.map((tab) => {
             const styles   = TAB_STYLES[tab.color];
@@ -416,38 +626,25 @@ export default function HiredPage() {
           })}
         </div>
 
-        {/* ── Filters + Column picker ────────────────────────────────────── */}
+        {/* ── Filters ─────────────────────────────────────────────────────── */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 space-y-3">
-
-          {/*
-            ── Filter row ────────────────────────────────────────────────────
-            Grid adapts:
-              • TA users  → 3 filters  (search, branch, requirements)
-              • HR/Admin  → 4 filters  (search, branch, requirements, TA picker)
-                            ↑ the extra column only renders when canFilterByTA is true
-          */}
           <div className={`grid grid-cols-1 gap-3 ${canFilterByTA ? 'md:grid-cols-4' : 'md:grid-cols-3'}`}>
 
             {/* Search */}
-            <div className={canFilterByTA ? 'md:col-span-1' : 'md:col-span-1'}>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
-                <input
-                  type="text"
-                  value={searchInput}
-                  onChange={(e) => setSearchInput(e.target.value)}
-                  placeholder="Search name, email or contact..."
-                  className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+              <input
+                type="text"
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                placeholder="Search name, email or contact..."
+                className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
             </div>
 
             {/* Branch */}
-            <select
-              value={branchFilter}
-              onChange={(e) => setBranchFilter(e.target.value)}
-              className="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
+            <select value={branchFilter} onChange={(e) => setBranchFilter(e.target.value)}
+              className="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
               <option value="">All Branches</option>
               {branches.map((b) => (
                 <option key={b.id} value={b.id}>{b.branch_name}</option>
@@ -455,45 +652,30 @@ export default function HiredPage() {
             </select>
 
             {/* Requirements */}
-            <select
-              value={reqFilter}
-              onChange={(e) => setReqFilter(e.target.value)}
-              className="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
+            <select value={reqFilter} onChange={(e) => setReqFilter(e.target.value)}
+              className="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
               <option value="">All Requirements</option>
               <option value="complete">✓ Complete</option>
               <option value="incomplete">✗ Incomplete</option>
               <option value="pending">⏳ Pending</option>
             </select>
 
-            {/*
-              ── TA Filter (HR / Admin only) ──────────────────────────────────
-              Hidden entirely from TA users so they never see it.
-              Shows a dropdown of all talent_acquisition users so HR/Admin
-              can scope the list to a single recruiter's applicants.
-            */}
+            {/* TA Filter (HR/Admin only) */}
             {canFilterByTA && (
               <div className="relative">
                 <Users className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
-                <select
-                  value={taFilter}
-                  onChange={(e) => setTaFilter(e.target.value)}
-                  className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none"
-                >
+                <select value={taFilter} onChange={(e) => setTaFilter(e.target.value)}
+                  className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none">
                   <option value="">All Recruiters (TA)</option>
                   {taUsers.map((ta) => (
-                    <option key={ta.id} value={ta.id}>
-                      {ta.name ?? ta.full_name}
-                    </option>
+                    <option key={ta.id} value={ta.id}>{ta.name ?? ta.full_name}</option>
                   ))}
                 </select>
               </div>
             )}
           </div>
 
-          {/* ── Active filter chips ──────────────────────────────────────── */}
-          {/* Shows small pills for each active filter so HR can see at a
-              glance what is currently filtered without opening the dropdowns */}
+          {/* Active filter chips */}
           {hasFilters && (
             <div className="flex flex-wrap items-center gap-2 pt-1">
               {branchFilter && (() => {
@@ -505,14 +687,12 @@ export default function HiredPage() {
                   </span>
                 ) : null;
               })()}
-
               {reqFilter && (
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-yellow-50 text-yellow-700 text-xs font-medium border border-yellow-100">
                   Req: {reqFilter}
                   <button onClick={() => setReqFilter('')} className="ml-0.5 hover:text-yellow-900"><X className="h-3 w-3" /></button>
                 </span>
               )}
-
               {taFilter && canFilterByTA && (() => {
                 const ta = taUsers.find((x) => String(x.id) === String(taFilter));
                 return ta ? (
@@ -525,7 +705,7 @@ export default function HiredPage() {
             </div>
           )}
 
-          {/* ── Toolbar: column picker + clear + rows ─────────────────────── */}
+          {/* Toolbar */}
           <div className="flex items-center justify-between pt-2 border-t border-gray-50">
             <div className="relative">
               <button
@@ -546,7 +726,7 @@ export default function HiredPage() {
                     <button onClick={() => setShowColPicker(false)}><X className="h-4 w-4 text-gray-400 hover:text-gray-600" /></button>
                   </div>
                   <div className="space-y-1 max-h-64 overflow-y-auto">
-                    {ALL_COLUMNS.map((col) => (
+                    {allColumnsWithCustom.map((col) => (
                       <label
                         key={col.key}
                         className={`flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer hover:bg-gray-50 ${col.always ? 'opacity-50 cursor-not-allowed' : ''}`}
@@ -558,7 +738,10 @@ export default function HiredPage() {
                           disabled={col.always}
                           className="rounded text-blue-600"
                         />
-                        <span className="text-sm text-gray-700">{col.label}</span>
+                        <span className="text-sm text-gray-700">
+                          {col.label}
+                          {col.custom && <span className="ml-1 text-xs text-blue-400">✦</span>}
+                        </span>
                       </label>
                     ))}
                   </div>
@@ -574,11 +757,8 @@ export default function HiredPage() {
               )}
               <div className="flex items-center gap-1.5 text-xs text-gray-400">
                 <span>Rows:</span>
-                <select
-                  value={perPage}
-                  onChange={(e) => setPerPage(Number(e.target.value))}
-                  className="text-xs border border-gray-200 rounded px-1.5 py-1 focus:outline-none"
-                >
+                <select value={perPage} onChange={(e) => setPerPage(Number(e.target.value))}
+                  className="text-xs border border-gray-200 rounded px-1.5 py-1 focus:outline-none">
                   <option value={15}>15</option>
                   <option value={30}>30</option>
                   <option value={50}>50</option>
@@ -588,7 +768,7 @@ export default function HiredPage() {
           </div>
         </div>
 
-        {/* ── Table ─────────────────────────────────────────────────────── */}
+        {/* ── Table ───────────────────────────────────────────────────────── */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
           {loading ? (
             <div className="flex items-center justify-center py-16 text-gray-400 text-sm">
@@ -608,7 +788,7 @@ export default function HiredPage() {
                   <thead>
                     <tr className="border-b border-gray-100 bg-gray-50">
                       {activeColumns.map((key) => {
-                        const col = ALL_COLUMNS.find((c) => c.key === key);
+                        const col = allColumnsWithCustom.find((c) => c.key === key);
                         return (
                           <th
                             key={key}
@@ -617,11 +797,20 @@ export default function HiredPage() {
                             onDragEnter={() => onDragEnter(key)}
                             onDragEnd={onDragEnd}
                             onDragOver={(e) => e.preventDefault()}
-                            className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide cursor-grab active:cursor-grabbing select-none group"
+                            className={`
+                              px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide
+                              cursor-grab active:cursor-grabbing select-none group transition-colors
+                              ${dragKey === key
+                                ? 'opacity-40 bg-indigo-50 text-gray-500'
+                                : dragOverKey === key
+                                  ? 'bg-indigo-100 text-indigo-700 border-l-2 border-indigo-400'
+                                  : 'text-gray-500'}
+                            `}
                           >
                             <div className="flex items-center gap-1">
                               <GripVertical className="h-3.5 w-3.5 text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
                               {col?.label}
+                              {col?.custom && <span className="text-blue-300 ml-0.5">✦</span>}
                             </div>
                           </th>
                         );
@@ -633,7 +822,10 @@ export default function HiredPage() {
                     {employees.map((emp) => (
                       <tr key={emp.id} className="hover:bg-gray-50 transition-colors group">
                         {activeColumns.map((key) => (
-                          <td key={key} className="px-4 py-3.5 whitespace-nowrap">
+                          <td
+                            key={key}
+                            className={`px-4 py-3.5 whitespace-nowrap transition-colors ${dragOverKey === key ? 'bg-indigo-50' : ''}`}
+                          >
                             <CellValue colKey={key} employee={emp} />
                           </td>
                         ))}
@@ -659,18 +851,12 @@ export default function HiredPage() {
                     <span className="ml-1 text-gray-400">({total} total)</span>
                   </p>
                   <div className="flex items-center gap-1">
-                    <button
-                      onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
-                      disabled={currentPage === 1}
-                      className="px-3 py-1.5 text-xs border border-gray-200 rounded-lg bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                    >
+                    <button onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))} disabled={currentPage === 1}
+                      className="px-3 py-1.5 text-xs border border-gray-200 rounded-lg bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
                       Previous
                     </button>
-                    <button
-                      onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
-                      disabled={currentPage === totalPages}
-                      className="px-3 py-1.5 text-xs border border-gray-200 rounded-lg bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                    >
+                    <button onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))} disabled={currentPage === totalPages}
+                      className="px-3 py-1.5 text-xs border border-gray-200 rounded-lg bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
                       Next
                     </button>
                   </div>
@@ -679,7 +865,23 @@ export default function HiredPage() {
             </>
           )}
         </div>
+
+        {/* Custom column legend */}
+        {customCols.length > 0 && (
+          <p className="text-xs text-gray-400">✦ Custom columns — data entered per employee on their profile page</p>
+        )}
+
       </div>
+
+      {/* Manage Columns Modal */}
+      {showManageCols && (
+        <ManageColumnsModal
+          customCols={customCols}
+          onClose={() => setShowManageCols(false)}
+          onRefresh={fetchCustomCols}
+        />
+      )}
+
     </DashboardLayout>
   );
 }

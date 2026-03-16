@@ -6,6 +6,11 @@ export const userService = {
     return response.data;
   },
 
+  getById: async (id) => {
+    const response = await apiClient.get(`/users/${id}`);
+    return response.data;
+  },
+
   create: async (data) => {
     const response = await apiClient.post('/users', data);
     return response.data;
@@ -26,15 +31,32 @@ export const userService = {
     return response.data;
   },
 
-  // Syncs the branches a TA user is allowed to access
-  // POST /api/v1/users/{userId}/branches
-  // Passing an empty array removes all branch access
+  updateRequirements: async (id, data) => {
+    const response = await apiClient.patch(`/users/${id}/requirements`, data);
+    return response.data;
+  },
+
+  // Upload profile photo — sends as multipart/form-data
+  uploadPhoto: async (id, file) => {
+    const formData = new FormData();
+    formData.append('photo', file);
+    const response = await apiClient.post(`/users/${id}/photo`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data;
+  },
+
+  // Remove profile photo
+  deletePhoto: async (id) => {
+    const response = await apiClient.delete(`/users/${id}/photo`);
+    return response.data;
+  },
+
   assignBranches: async (userId, branchIds) => {
     const response = await apiClient.post(`/users/${userId}/branches`, { branch_ids: branchIds });
     return response.data;
   },
 
-  // Get branches assigned to a specific user
   getAssignedBranches: async (userId) => {
     const response = await apiClient.get(`/users/${userId}/branches`);
     return response.data;

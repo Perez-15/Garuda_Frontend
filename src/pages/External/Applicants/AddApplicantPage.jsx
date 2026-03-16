@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
-import DashboardLayout from '../../components/layout/DashboardLayout';
-import { applicantService } from '../../services/applicantService';
-import { branchService } from '../../services/branchService';
-import { useAuth } from '../../contexts/AuthContext';
+import DashboardLayout from '../../../components/layout/DashboardLayout';
+import { applicantService } from '../../../services/applicantService';
+import { branchService } from '../../../services/branchService';
+import { useAuth } from '../../../contexts/AuthContext';
 
 export default function AddApplicantPage() {
   const navigate = useNavigate();

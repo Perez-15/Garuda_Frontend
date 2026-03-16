@@ -18,6 +18,7 @@ import {
   ChevronRight,
   UserCheck,
   UserCog,
+  Clock,
 } from 'lucide-react';
 
 export default function DashboardLayout({ children }) {
@@ -38,8 +39,21 @@ export default function DashboardLayout({ children }) {
   const isActive     = (path) => location.pathname === path;
   const isStartsWith = (path) => location.pathname.startsWith(path);
 
-  // ── Applicants group is "open" when on any applicant-related page ──────────
-  const applicantsOpen = isStartsWith('/applicants') || isStartsWith('/on-process') || isStartsWith('/employees');
+  // ── Route-based group open state ───────────────────────────────────────────
+  const applicantsOpen =
+    isStartsWith('/applicants') ||
+    isStartsWith('/in-process') ||
+    isStartsWith('/employees');
+  const attendanceOpen = isStartsWith('/attendance');
+
+  // ── Lifted group toggle state (keyed by group name) ────────────────────────
+  const [openGroups, setOpenGroups] = useState({
+    External:   applicantsOpen,
+    Attendance: attendanceOpen,
+  });
+
+  const toggleGroup = (name) =>
+    setOpenGroups((prev) => ({ ...prev, [name]: !prev[name] }));
 
   // ── Navigation config ──────────────────────────────────────────────────────
   const navigation = [
@@ -53,28 +67,32 @@ export default function DashboardLayout({ children }) {
       href: '/positions',
       icon: Briefcase,
     },
-    // ── Applicants group (collapsible) ───────────────────────────────────────
     {
-      name: 'Applicants',
+      name: 'External',
       icon: Users,
       group: true,
       children: [
-        {
-          name: 'All Applicants',
-          href: '/applicants',
-          icon: Users,
-          exact: true,
-        },
-        {
-          name: 'In-Process',
-          href: '/in-process',
-          icon: UserCog,
-        },
-        {
-          name: 'Employed',
-          href: '/employees',
-          icon: UserCheck,
-        },
+        { name: 'All Applicants', href: '/applicants', icon: Users,    exact: true },
+        { name: 'In-Process',     href: '/in-process', icon: UserCog              },
+        { name: 'Employed',       href: '/employees',  icon: UserCheck             },
+      ],
+    },
+    {
+      name: 'Internal',
+      href: '/internal/employees',
+      icon: UsersIcon,
+    },
+    {
+      name: 'Attendance',
+      icon: Clock,
+      group: true,
+      children: [
+        { name: 'My Attendance', href: '/attendance', icon: Clock, exact: true },
+        ...(
+          ['super_admin', 'hr_admin', 'accounting'].includes(userRole)
+            ? [{ name: 'Team View', href: '/attendance/team', icon: UsersIcon }]
+            : []
+        ),
       ],
     },
     {
@@ -89,8 +107,8 @@ export default function DashboardLayout({ children }) {
     },
     ...(!isTA
       ? [
-          { name: 'Process',  href: '/workflows', icon: Workflow },
-          { name: 'Reports',  href: '/reports',   icon: FileText },
+          { name: 'Process', href: '/workflows', icon: Workflow },
+          { name: 'Reports', href: '/reports',   icon: FileText },
         ]
       : []),
     ...(userRole === 'super_admin' || userRole === 'hr_admin'
@@ -98,14 +116,10 @@ export default function DashboardLayout({ children }) {
       : []),
   ];
 
-  // ── Reusable logo block ────────────────────────────────────────────────────
+  // ── Logo ───────────────────────────────────────────────────────────────────
   const LogoBrand = () => (
     <div className="flex items-center gap-3">
-      <img
-        src={logo}
-        alt="Garuda HR"
-        className="h-10 w-10 object-contain flex-shrink-0"
-      />
+      <img src={logo} alt="Garuda HR" className="h-10 w-10 object-contain flex-shrink-0" />
       <div className="flex flex-col">
         <span className="text-white font-bold text-sm leading-tight">Garuda HR</span>
         <span className="text-gray-400 text-xs leading-tight">Recruitment Agency</span>
@@ -113,58 +127,65 @@ export default function DashboardLayout({ children }) {
     </div>
   );
 
-  // ── Nav item renderer (shared between desktop + mobile) ───────────────────
+  // ── Nav item renderer ──────────────────────────────────────────────────────
+  // NOTE: No useState inside here — all state lives in DashboardLayout above.
   const NavItem = ({ item, onLinkClick }) => {
-    // Group item (collapsible)
     if (item.group) {
-      const isGroupActive = applicantsOpen;
+      const isGroupActive =
+        item.name === 'Attendance' ? attendanceOpen : applicantsOpen;
+
+      // Use lifted state; also force-open when on a child route
+      const isOpen = openGroups[item.name] || isGroupActive;
+
       return (
         <div>
-          {/* Group header — not clickable, just visual */}
-          <div
-            className={`flex items-center justify-between px-2 py-2 text-sm font-medium rounded-md cursor-default select-none
-              ${isGroupActive ? 'text-white' : 'text-gray-300'}`}
+          <button
+            onClick={() => toggleGroup(item.name)}
+            className={`w-full flex items-center justify-between px-2 py-2 text-sm font-medium rounded-md transition-colors
+              ${isGroupActive
+                ? 'text-white'
+                : 'text-gray-300 hover:bg-gray-700 hover:text-white'}`}
           >
             <div className="flex items-center">
               <item.icon className="mr-3 h-5 w-5 flex-shrink-0" />
               {item.name}
             </div>
-            {isGroupActive
-              ? <ChevronDown className="h-4 w-4 text-gray-400" />
+            {isOpen
+              ? <ChevronDown  className="h-4 w-4 text-gray-400" />
               : <ChevronRight className="h-4 w-4 text-gray-400" />}
-          </div>
+          </button>
 
-          {/* Children — always visible when on any applicant page, otherwise shown too for easy nav */}
-          <div className="ml-4 mt-0.5 space-y-0.5 border-l border-gray-700 pl-3">
-            {item.children.map((child) => {
-              const active = child.exact
-                ? isActive(child.href)
-                : isStartsWith(child.href) && child.href !== '/applicants'
-                  ? true
-                  : isActive(child.href);
+          {isOpen && (
+            <div className="ml-4 mt-0.5 space-y-0.5 border-l border-gray-700 pl-3">
+              {item.children.map((child) => {
+                const active = child.exact
+                  ? isActive(child.href)
+                  : isStartsWith(child.href) && child.href !== '/applicants'
+                    ? true
+                    : isActive(child.href);
 
-              return (
-                <Link
-                  key={child.name}
-                  to={child.href}
-                  onClick={onLinkClick}
-                  className={`flex items-center px-2 py-1.5 text-sm rounded-md transition-colors
-                    ${active
-                      ? 'bg-gray-700 text-white font-medium'
-                      : 'text-gray-400 hover:bg-gray-700 hover:text-white'
-                    }`}
-                >
-                  <child.icon className="mr-2.5 h-4 w-4 flex-shrink-0" />
-                  {child.name}
-                </Link>
-              );
-            })}
-          </div>
+                return (
+                  <Link
+                    key={child.name}
+                    to={child.href}
+                    onClick={onLinkClick}
+                    className={`flex items-center px-2 py-1.5 text-sm rounded-md transition-colors
+                      ${active
+                        ? 'bg-gray-700 text-white font-medium'
+                        : 'text-gray-400 hover:bg-gray-700 hover:text-white'}`}
+                  >
+                    <child.icon className="mr-2.5 h-4 w-4 flex-shrink-0" />
+                    {child.name}
+                  </Link>
+                );
+              })}
+            </div>
+          )}
         </div>
       );
     }
 
-    // Regular item
+    // Regular link
     return (
       <Link
         to={item.href}
@@ -172,8 +193,7 @@ export default function DashboardLayout({ children }) {
         className={`flex items-center px-2 py-2 text-sm font-medium rounded-md transition-colors
           ${isActive(item.href)
             ? 'bg-gray-800 text-white'
-            : 'text-gray-300 hover:bg-gray-700 hover:text-white'
-          }`}
+            : 'text-gray-300 hover:bg-gray-700 hover:text-white'}`}
       >
         <item.icon className="mr-3 h-5 w-5 flex-shrink-0" />
         {item.name}
@@ -181,10 +201,11 @@ export default function DashboardLayout({ children }) {
     );
   };
 
+  // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-gray-100">
 
-      {/* ── Desktop sidebar ─────────────────────────────────────────────────── */}
+      {/* Desktop sidebar */}
       <div className="hidden md:flex md:w-64 md:flex-col md:fixed md:inset-y-0">
         <div className="flex-1 flex flex-col min-h-0 bg-gray-900">
           <div className="flex-1 flex flex-col pt-5 pb-4 overflow-y-auto">
@@ -217,7 +238,7 @@ export default function DashboardLayout({ children }) {
         </div>
       </div>
 
-      {/* ── Mobile sidebar ───────────────────────────────────────────────────── */}
+      {/* Mobile sidebar */}
       {sidebarOpen && (
         <div className="md:hidden">
           <div className="fixed inset-0 flex z-40">
@@ -253,7 +274,7 @@ export default function DashboardLayout({ children }) {
         </div>
       )}
 
-      {/* ── Main content ─────────────────────────────────────────────────────── */}
+      {/* Main content */}
       <div className="md:pl-64 flex flex-col flex-1">
         {/* Mobile topbar */}
         <div className="sticky top-0 z-10 md:hidden pl-1 pt-1 sm:pl-3 sm:pt-3 bg-white shadow">
@@ -273,6 +294,7 @@ export default function DashboardLayout({ children }) {
           </div>
         </main>
       </div>
+
     </div>
   );
 }
