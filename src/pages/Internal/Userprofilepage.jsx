@@ -2,14 +2,16 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, Camera, Save, X, Loader2, Edit2,
-  Phone, Mail, MapPin, CalendarDays, User as UserIcon,
-  Building2, ShieldCheck, FileText, CreditCard,
-  CheckCircle, Clock, XCircle, Users, Briefcase,
-  AlertCircle, Trash2, ZoomIn,
+  CalendarDays, Building2, CreditCard, FileText,
+  User as UserIcon, Briefcase, CheckCircle, Clock,
+  XCircle, AlertCircle, Trash2, ZoomIn,
 } from 'lucide-react';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import { userService } from '../../services/userService';
+import { customColumnService } from '../../services/customcolumnService';
 import { useAuth } from '../../contexts/AuthContext';
+
+const PAGE = 'internal_employees';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const fmt = (d) =>
@@ -18,14 +20,86 @@ const fmt = (d) =>
 const fmtShort = (d) =>
   d ? new Date(d).toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' }) : '—';
 
-// ── Role badge ────────────────────────────────────────────────────────────────
+// Map field_key → which nested object holds the value on the profile
+const FIELD_SOURCE = {
+  // role comes from roles array
+  role: (profile) => profile.roles?.[0]?.name || '—',
+};
+
+// Fields that need special read handling from profile
+const FIXED_READ = {
+  full_name:                (p) => p.name,
+  email:                    (p) => p.email,
+  contact_number:           (p) => p.contact_number,
+  address:                  (p) => p.address,
+  date_of_birth:            (p) => fmt(p.date_of_birth),
+  age:                      (p) => p.age,
+  gender:                   (p) => p.gender,
+  civil_status:             (p) => p.civil_status,
+  emergency_contact_name:   (p) => p.emergency_contact_name,
+  emergency_contact_number: (p) => p.emergency_contact_number,
+  date_hired:               (p) => fmt(p.date_hired),
+  date_ended:               (p) => fmt(p.date_ended),
+  date_resigned:            (p) => fmt(p.date_resigned),
+  daily_rate:               (p) => p.daily_rate ? `₱${Number(p.daily_rate).toLocaleString()}` : '—',
+  employment_status:        (p) => p.employment_status,
+  source:                   (p) => p.source,
+  remarks:                  (p) => p.remarks,
+  sss:                      (p) => p.sss,
+  pagibig:                  (p) => p.pagibig,
+  philhealth:               (p) => p.philhealth,
+  tin:                      (p) => p.tin,
+  nbi_status:               (p) => p.nbi_status,
+  medcert_status:           (p) => p.medcert_status,
+  police_clearance_status:  (p) => p.police_clearance_status,
+  contract_status:          (p) => p.contract_status,
+  requirements_status:      (p) => p.requirements_status,
+  psa_birth_cert:           (p) => p.custom_fields?.psa_birth_cert,
+  sss_doc:                  (p) => p.custom_fields?.sss_doc,
+  philhealth_doc:           (p) => p.custom_fields?.philhealth_doc,
+  pagibig_doc:              (p) => p.custom_fields?.pagibig_doc,
+  tin_doc:                  (p) => p.custom_fields?.tin_doc,
+  coe:                      (p) => p.custom_fields?.coe,
+  tor_diploma:              (p) => p.custom_fields?.tor_diploma,
+  valid_id_photocopy:       (p) => p.custom_fields?.valid_id_photocopy,
+  picture_1x1:              (p) => p.custom_fields?.picture_1x1,
+};
+
+// Fields that write to flat form vs custom_fields
+const FIXED_KEYS = new Set([
+  'full_name','email','contact_number','address','date_of_birth','age','gender',
+  'civil_status','emergency_contact_name','emergency_contact_number',
+  'date_hired','date_ended','date_resigned','daily_rate','employment_status',
+  'source','remarks','sss','pagibig','philhealth','tin',
+  'nbi_status','medcert_status','police_clearance_status','contract_status','requirements_status',
+]);
+
+// Map field_key to actual user model key for saving
+const SAVE_KEY_MAP = { full_name: 'name' };
+const toSaveKey = (k) => SAVE_KEY_MAP[k] || k;
+
+// Section icon map
+const SECTION_ICONS = {
+  'Personal Information':     <UserIcon className="h-4 w-4" />,
+  'Employment Details':       <Briefcase className="h-4 w-4" />,
+  'Government IDs':           <CreditCard className="h-4 w-4" />,
+  'Documents & Requirements': <FileText className="h-4 w-4" />,
+};
+const SECTION_COLORS = {
+  'Personal Information':     'text-blue-500',
+  'Employment Details':       'text-indigo-500',
+  'Government IDs':           'text-amber-500',
+  'Documents & Requirements': 'text-green-500',
+};
+
+// ── Badges ────────────────────────────────────────────────────────────────────
 function RoleBadge({ role }) {
   const map = {
-    super_admin:        { label: 'Super Admin',        cls: 'bg-red-100 text-red-700 border-red-200'         },
-    hr_admin:           { label: 'HR Admin',           cls: 'bg-blue-100 text-blue-700 border-blue-200'      },
-    talent_acquisition: { label: 'Talent Acquisition', cls: 'bg-indigo-100 text-indigo-700 border-indigo-200'},
-    accounting:         { label: 'Accounting',         cls: 'bg-amber-100 text-amber-700 border-amber-200'   },
-    marketing:          { label: 'Marketing',          cls: 'bg-pink-100 text-pink-700 border-pink-200'      },
+    super_admin:        { label: 'Super Admin',        cls: 'bg-red-100 text-red-700 border-red-200'          },
+    hr_admin:           { label: 'HR Admin',           cls: 'bg-blue-100 text-blue-700 border-blue-200'       },
+    talent_acquisition: { label: 'Talent Acquisition', cls: 'bg-indigo-100 text-indigo-700 border-indigo-200' },
+    accounting:         { label: 'Accounting',         cls: 'bg-amber-100 text-amber-700 border-amber-200'    },
+    marketing:          { label: 'Marketing',          cls: 'bg-pink-100 text-pink-700 border-pink-200'       },
   };
   const r = map[role] || { label: role || '—', cls: 'bg-gray-100 text-gray-600 border-gray-200' };
   return (
@@ -35,12 +109,11 @@ function RoleBadge({ role }) {
   );
 }
 
-// ── Doc status badge ──────────────────────────────────────────────────────────
 function DocStatusBadge({ status }) {
   const map = {
-    submitted:    { icon: <CheckCircle className="h-3.5 w-3.5" />, label: 'Submitted',    cls: 'bg-green-50 text-green-700 border-green-200'  },
-    pending:      { icon: <Clock className="h-3.5 w-3.5" />,       label: 'Pending',      cls: 'bg-yellow-50 text-yellow-700 border-yellow-200'},
-    not_required: { icon: <XCircle className="h-3.5 w-3.5" />,     label: 'Not Required', cls: 'bg-gray-50 text-gray-400 border-gray-200'     },
+    submitted:    { icon: <CheckCircle className="h-3.5 w-3.5" />, label: 'Submitted',    cls: 'bg-green-50 text-green-700 border-green-200'   },
+    pending:      { icon: <Clock className="h-3.5 w-3.5" />,       label: 'Pending',      cls: 'bg-yellow-50 text-yellow-700 border-yellow-200' },
+    not_required: { icon: <XCircle className="h-3.5 w-3.5" />,     label: 'Not Required', cls: 'bg-gray-50 text-gray-400 border-gray-200'      },
   };
   const s = map[status] || map['pending'];
   return (
@@ -50,7 +123,6 @@ function DocStatusBadge({ status }) {
   );
 }
 
-// ── Requirements badge ────────────────────────────────────────────────────────
 function ReqBadge({ status }) {
   const map = {
     complete:   'bg-green-100 text-green-700 border-green-200',
@@ -65,54 +137,199 @@ function ReqBadge({ status }) {
   );
 }
 
-// ── Section card wrapper ──────────────────────────────────────────────────────
-function SectionCard({ title, icon: Icon, iconColor = 'text-indigo-500', children, action }) {
+// ── Dynamic field value renderer ──────────────────────────────────────────────
+function FieldValue({ fieldKey, type, profile }) {
+  const reader = FIXED_READ[fieldKey];
+  const val = reader
+    ? reader(profile)
+    : profile.custom_fields?.[fieldKey];
+
+  // Special renderers
+  if (['nbi_status','medcert_status','police_clearance_status','contract_status',
+       'psa_birth_cert','sss_doc','philhealth_doc','pagibig_doc','tin_doc',
+       'coe','tor_diploma','valid_id_photocopy','picture_1x1'].includes(fieldKey)) {
+    return <DocStatusBadge status={val} />;
+  }
+  if (fieldKey === 'requirements_status') return <ReqBadge status={val} />;
+  if (fieldKey === 'role') return <RoleBadge role={profile.roles?.[0]?.name} />;
+
+  const isMonoKey = ['sss','pagibig','philhealth','tin'].includes(fieldKey);
+  return (
+    <span className={`text-sm text-gray-800 ${isMonoKey ? 'font-mono' : ''}`}>
+      {val || '—'}
+    </span>
+  );
+}
+
+// ── Dynamic field editor ──────────────────────────────────────────────────────
+function FieldEditor({ field, value, onChange }) {
+  const { field_key, label, type, options } = field;
+
+  // options may come from the API as a JSON string — parse it if needed
+  const parsedOptions = Array.isArray(options)
+    ? options
+    : (typeof options === 'string'
+        ? (() => { try { return JSON.parse(options); } catch { return []; } })()
+        : []);
+
+  const inputCls = "w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500";
+
+  if (type === 'select' && parsedOptions.length) {
+    return (
+      <div className="flex flex-col gap-1">
+        <label className="text-xs font-medium text-gray-400 uppercase tracking-wide">{label}</label>
+<select value={value || ''} onChange={(e) => onChange(field_key, e.target.value)} className={`${inputCls} bg-white`}>
+  <option value="" disabled>---</option>  {/* ← add disabled */}
+  {parsedOptions.map((o) => <option key={o} value={o}>{o}</option>)}
+</select>
+      </div>
+    );
+  }
+
+  if (type === 'date') {
+    return (
+      <div className="flex flex-col gap-1">
+        <label className="text-xs font-medium text-gray-400 uppercase tracking-wide">{label}</label>
+        <input type="date" value={value || ''} onChange={(e) => onChange(field_key, e.target.value)} className={inputCls} />
+      </div>
+    );
+  }
+
+  if (type === 'number') {
+    return (
+      <div className="flex flex-col gap-1">
+        <label className="text-xs font-medium text-gray-400 uppercase tracking-wide">{label}</label>
+        <input type="number" value={value || ''} onChange={(e) => onChange(field_key, e.target.value)} className={inputCls} />
+      </div>
+    );
+  }
+
+  if (field_key === 'address') {
+    return (
+      <div className="flex flex-col gap-1">
+        <label className="text-xs font-medium text-gray-400 uppercase tracking-wide">{label}</label>
+        <textarea value={value || ''} onChange={(e) => onChange(field_key, e.target.value)}
+          rows={2} className={`${inputCls} resize-none`} />
+      </div>
+    );
+  }
+
+  const isMonoKey = ['sss','pagibig','philhealth','tin'].includes(field_key);
+  return (
+    <div className="flex flex-col gap-1">
+      <label className="text-xs font-medium text-gray-400 uppercase tracking-wide">{label}</label>
+      <input
+        type={type === 'email' ? 'email' : type === 'phone' ? 'tel' : 'text'}
+        value={value || ''}
+        onChange={(e) => onChange(field_key, e.target.value)}
+        className={`${inputCls} ${isMonoKey ? 'font-mono' : ''}`}
+      />
+    </div>
+  );
+}
+
+// ── Section card ──────────────────────────────────────────────────────────────
+function SectionCard({ title, fields, profile, editing, onEdit, onSave, onCancel, onFieldChange, formValues, saving, canEdit }) {
+  const icon  = SECTION_ICONS[title]  || <FileText className="h-4 w-4" />;
+  const color = SECTION_COLORS[title] || 'text-gray-500';
+
+  // Assigned branches — special render
+  const renderBranches = () => (
+    <div className="col-span-2">
+      <span className="text-xs font-medium text-gray-400 uppercase tracking-wide">Assigned Branches</span>
+      <div className="flex flex-wrap gap-1.5 mt-1">
+        {profile.branches?.length > 0
+          ? profile.branches.map((b) => (
+              <span key={b.id} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs bg-purple-50 text-purple-700 border border-purple-100">
+                <Building2 className="h-3 w-3" /> {b.branch_name}
+              </span>
+            ))
+          : <span className="text-sm text-gray-400">—</span>}
+      </div>
+    </div>
+  );
+
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
       <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
         <div className="flex items-center gap-2.5">
-          <div className={`p-1.5 rounded-lg bg-gray-50 ${iconColor}`}>
-            <Icon className="h-4 w-4" />
-          </div>
+          <div className={`p-1.5 rounded-lg bg-gray-50 ${color}`}>{icon}</div>
           <h3 className="text-sm font-semibold text-gray-800">{title}</h3>
         </div>
-        {action}
+        {canEdit && (
+          editing ? (
+            <div className="flex items-center gap-1.5">
+              <button onClick={onCancel}
+                className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+                <X className="h-3.5 w-3.5" /> Cancel
+              </button>
+              <button onClick={onSave} disabled={saving}
+                className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors">
+                {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                Save
+              </button>
+            </div>
+          ) : (
+            <button onClick={onEdit}
+              className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+              <Edit2 className="h-3.5 w-3.5" /> Edit
+            </button>
+          )
+        )}
       </div>
-      <div className="px-6 py-5">{children}</div>
-    </div>
-  );
-}
 
-// ── Field row ─────────────────────────────────────────────────────────────────
-function FieldRow({ label, value, mono = false }) {
-  return (
-    <div className="flex flex-col gap-0.5">
-      <span className="text-xs font-medium text-gray-400 uppercase tracking-wide">{label}</span>
-      <span className={`text-sm text-gray-800 ${mono ? 'font-mono' : ''}`}>{value || '—'}</span>
-    </div>
-  );
-}
-
-// ── Editable field ────────────────────────────────────────────────────────────
-function EditableField({ label, value, onChange, type = 'text', options, mono = false }) {
-  if (options) {
-    return (
-      <div className="flex flex-col gap-1">
-        <label className="text-xs font-medium text-gray-400 uppercase tracking-wide">{label}</label>
-        <select value={value || ''} onChange={(e) => onChange(e.target.value)}
-          className="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white">
-          {options.map((o) => (
-            <option key={o.value} value={o.value}>{o.label}</option>
-          ))}
-        </select>
+      <div className="px-6 py-5">
+        {editing ? (
+          <div className="grid grid-cols-2 gap-4">
+            {fields.map((f) => {
+              if (f.field_key === 'role') return null; // role not editable inline
+              const span = ['full_name','email','address','emergency_contact_name',
+                            'emergency_contact_number'].includes(f.field_key) ? 'col-span-2' : '';
+              return (
+                <div key={f.field_key} className={span || 'col-span-1'}>
+                  <FieldEditor field={f} value={formValues[f.field_key] ?? ''} onChange={onFieldChange} />
+                </div>
+              );
+            })}
+            {title === 'Employment Details' && renderBranches()}
+          </div>
+        ) : (
+          <div className="divide-y divide-gray-50">
+            {fields.map((f) => {
+              if (f.field_key === 'role') {
+                return (
+                  <div key="role" className="flex items-center justify-between py-2.5 gap-4">
+                    <span className="text-sm text-gray-400 w-44 flex-shrink-0">Department / Role</span>
+                    <div className="flex-1 flex justify-end"><RoleBadge role={profile.roles?.[0]?.name} /></div>
+                  </div>
+                );
+              }
+              return (
+                <div key={f.field_key} className="flex items-center justify-between py-2.5 gap-4">
+                  <span className="text-sm text-gray-400 w-44 flex-shrink-0">{f.label}</span>
+                  <div className="flex-1 flex justify-end">
+                    <FieldValue fieldKey={f.field_key} type={f.type} profile={profile} />
+                  </div>
+                </div>
+              );
+            })}
+            {title === 'Employment Details' && (
+              <div className="flex items-start justify-between py-2.5 gap-4">
+                <span className="text-sm text-gray-400 w-44 flex-shrink-0">Assigned Branches</span>
+                <div className="flex-1 flex flex-wrap justify-end gap-1">
+                  {profile.branches?.length > 0
+                    ? profile.branches.map((b) => (
+                        <span key={b.id} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs bg-purple-50 text-purple-700 border border-purple-100">
+                          <Building2 className="h-3 w-3" /> {b.branch_name}
+                        </span>
+                      ))
+                    : <span className="text-sm text-gray-400">—</span>}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
-    );
-  }
-  return (
-    <div className="flex flex-col gap-1">
-      <label className="text-xs font-medium text-gray-400 uppercase tracking-wide">{label}</label>
-      <input type={type} value={value || ''} onChange={(e) => onChange(e.target.value)}
-        className={`text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 ${mono ? 'font-mono' : ''}`} />
     </div>
   );
 }
@@ -121,31 +338,23 @@ function EditableField({ label, value, onChange, type = 'text', options, mono = 
 // Main Page
 // ─────────────────────────────────────────────────────────────────────────────
 export default function UserProfilePage() {
-  const { id } = useParams();
-  const navigate = useNavigate();
+  const { id }       = useParams();
+  const navigate     = useNavigate();
   const { user: currentUser } = useAuth();
 
   const [profile,       setProfile]       = useState(null);
+  const [schema,        setSchema]        = useState([]);   // grouped sections
   const [loading,       setLoading]       = useState(true);
   const [toast,         setToast]         = useState(null);
-  const [lightbox,      setLightbox]      = useState(false);  // ← lightbox state
-
-  // ── Edit states per section ───────────────────────────────────────────────
-  const [editingPersonal,     setEditingPersonal]     = useState(false);
-  const [editingEmployment,   setEditingEmployment]   = useState(false);
-  const [editingRequirements, setEditingRequirements] = useState(false);
-  const [editingGovIds,       setEditingGovIds]       = useState(false);
-  const [savingSection,       setSavingSection]       = useState(null);
-
-  // ── Form state ────────────────────────────────────────────────────────────
-  const [personalForm,     setPersonalForm]     = useState({});
-  const [employmentForm,   setEmploymentForm]   = useState({});
-  const [requirementsForm, setRequirementsForm] = useState({});
-  const [govIdsForm,       setGovIdsForm]       = useState({});
-
-  // ── Photo upload ──────────────────────────────────────────────────────────
-  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [lightbox,      setLightbox]      = useState(false);
+  const [uploadingPhoto,setUploadingPhoto] = useState(false);
   const photoInputRef = useRef(null);
+
+  // Per-section edit state: { [sectionName]: boolean }
+  const [editingSections, setEditingSections] = useState({});
+  const [savingSections,  setSavingSections]  = useState({});
+  // Per-section form values: { [sectionName]: { field_key: value } }
+  const [sectionForms, setSectionForms] = useState({});
 
   const userRole  = currentUser?.roles?.[0]?.name;
   const canManage = userRole === 'super_admin' || userRole === 'hr_admin';
@@ -157,166 +366,142 @@ export default function UserProfilePage() {
     setTimeout(() => setToast(null), 4000);
   }, []);
 
-  // ── Load profile ──────────────────────────────────────────────────────────
-  const loadProfile = useCallback(async () => {
+  // ── Group flat columns into sections ───────────────────────────────────────
+  const groupSchema = useCallback((columns) => {
+    const map = {};
+    const order = [];
+    columns.forEach((col) => {
+      const sec = col.section || 'General';
+      if (!map[sec]) { map[sec] = []; order.push(sec); }
+      map[sec].push(col);
+    });
+    return order.map((sec) => ({ name: sec, fields: map[sec] }));
+  }, []);
+
+  // ── Build form values from profile for a section ───────────────────────────
+  const buildFormForSection = useCallback((sectionFields, profile) => {
+    const form = {};
+    sectionFields.forEach((f) => {
+      if (FIXED_KEYS.has(f.field_key)) {
+        // Map display key back to raw profile key
+        const rawKey = SAVE_KEY_MAP[f.field_key] ? f.field_key : f.field_key;
+        // Special cases
+        if (f.field_key === 'full_name')      form[f.field_key] = profile.name || '';
+        else if (f.field_key === 'date_of_birth') form[f.field_key] = profile.date_of_birth?.substring(0,10) || '';
+        else if (f.field_key === 'date_hired')    form[f.field_key] = profile.date_hired?.substring(0,10) || '';
+        else if (f.field_key === 'date_ended')    form[f.field_key] = profile.date_ended?.substring(0,10) || '';
+        else if (f.field_key === 'date_resigned') form[f.field_key] = profile.date_resigned?.substring(0,10) || '';
+        else form[f.field_key] = profile[f.field_key] || '';
+      } else {
+        form[f.field_key] = profile.custom_fields?.[f.field_key] || '';
+      }
+    });
+    return form;
+  }, []);
+
+  // ── Load profile + schema ──────────────────────────────────────────────────
+  const loadData = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await userService.getById(id);
-      const u = res.user;
-      setProfile(u);
-      setPersonalForm({
-        name:                     u.name            || '',
-        email:                    u.email           || '',
-        contact_number:           u.contact_number  || '',
-        address:                  u.address         || '',
-        date_of_birth:            u.date_of_birth   ? u.date_of_birth.substring(0, 10) : '',
-        gender:                   u.gender          || '',
-        civil_status:             u.civil_status    || '',
-        emergency_contact_name:   u.emergency_contact_name   || '',
-        emergency_contact_number: u.emergency_contact_number || '',
-      });
-      setEmploymentForm({
-        role:       u.roles?.[0]?.name || '',
-        date_hired: u.date_hired ? u.date_hired.substring(0, 10) : '',
-        department: u.department || '',
-      });
-      setRequirementsForm({
-        nbi_status:              u.nbi_status              || 'pending',
-        medcert_status:          u.medcert_status          || 'pending',
-        police_clearance_status: u.police_clearance_status || 'pending',
-        contract_status:         u.contract_status         || 'pending',
-        requirements_status:     u.requirements_status     || 'pending',
-      });
-      setGovIdsForm({
-        sss:        u.sss        || '',
-        pagibig:    u.pagibig    || '',
-        philhealth: u.philhealth || '',
-        tin:        u.tin        || '',
-      });
-    } catch (e) {
+      const [profileRes, schemaRes] = await Promise.all([
+        userService.getById(id),
+        customColumnService.getByPage(PAGE),
+      ]);
+      const p = profileRes.user;
+      const grouped = groupSchema(Array.isArray(schemaRes) ? schemaRes : []);
+      setProfile(p);
+      setSchema(grouped);
+      // Init form values per section
+      const forms = {};
+      grouped.forEach((sec) => { forms[sec.name] = buildFormForSection(sec.fields, p); });
+      setSectionForms(forms);
+    } catch {
       showToast('error', 'Failed to load profile.');
     } finally {
       setLoading(false);
     }
-  }, [id, showToast]);
+  }, [id, groupSchema, buildFormForSection, showToast]);
 
-  useEffect(() => { loadProfile(); }, [loadProfile]);
+  useEffect(() => { loadData(); }, [loadData]);
 
-  // ── Close lightbox on Escape ──────────────────────────────────────────────
   useEffect(() => {
     const handleKey = (e) => { if (e.key === 'Escape') setLightbox(false); };
     if (lightbox) window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
   }, [lightbox]);
 
-  // ── Save handlers ─────────────────────────────────────────────────────────
-  const savePersonal = async () => {
-    try {
-      setSavingSection('personal');
-      await userService.update(id, personalForm);
-      showToast('success', 'Personal info updated.');
-      setEditingPersonal(false);
-      loadProfile();
-    } catch (e) {
-      showToast('error', e?.response?.data?.message || 'Failed to save.');
-    } finally { setSavingSection(null); }
+  // ── Field change handler ───────────────────────────────────────────────────
+  const handleFieldChange = (sectionName, fieldKey, value) => {
+    setSectionForms((prev) => ({
+      ...prev,
+      [sectionName]: { ...prev[sectionName], [fieldKey]: value },
+    }));
   };
 
-  const saveEmployment = async () => {
+  // ── Save a section ─────────────────────────────────────────────────────────
+  const saveSection = async (sectionName, fields) => {
     try {
-      setSavingSection('employment');
-      await userService.update(id, employmentForm);
-      showToast('success', 'Employment info updated.');
-      setEditingEmployment(false);
-      loadProfile();
-    } catch (e) {
-      showToast('error', e?.response?.data?.message || 'Failed to save.');
-    } finally { setSavingSection(null); }
-  };
+      setSavingSections((s) => ({ ...s, [sectionName]: true }));
+      const form = sectionForms[sectionName] || {};
 
-  const saveRequirements = async () => {
-    try {
-      setSavingSection('requirements');
-      await userService.updateRequirements(id, requirementsForm);
-      showToast('success', 'Requirements updated.');
-      setEditingRequirements(false);
-      loadProfile();
-    } catch (e) {
-      showToast('error', e?.response?.data?.message || 'Failed to save.');
-    } finally { setSavingSection(null); }
-  };
+      const fixedPayload    = {};
+      const customPayload   = {};
 
-  const saveGovIds = async () => {
-    try {
-      setSavingSection('govids');
-      await userService.update(id, govIdsForm);
-      showToast('success', 'Government IDs updated.');
-      setEditingGovIds(false);
-      loadProfile();
+      fields.forEach((f) => {
+        if (f.field_key === 'role') return; // handled separately
+        const val = form[f.field_key];
+        if (FIXED_KEYS.has(f.field_key)) {
+          fixedPayload[toSaveKey(f.field_key)] = val;
+        } else {
+          customPayload[f.field_key] = val;
+        }
+      });
+
+    // Save fixed fields
+if (Object.keys(fixedPayload).length) {
+  await userService.update(id, fixedPayload);
+}
+
+// Save custom fields
+if (Object.keys(customPayload).length) {
+  try {
+    await userService.updateCustomFields(id, customPayload);
+  } catch (err) {
+    console.warn("Custom fields update skipped:", err);
+  }
+}
+
+      showToast('success', `${sectionName} updated.`);
+      setEditingSections((s) => ({ ...s, [sectionName]: false }));
+      loadData();
     } catch (e) {
       showToast('error', e?.response?.data?.message || 'Failed to save.');
-    } finally { setSavingSection(null); }
+    } finally {
+      setSavingSections((s) => ({ ...s, [sectionName]: false }));
+    }
   };
 
   // ── Photo handlers ────────────────────────────────────────────────────────
   const handlePhotoChange = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 2 * 1024 * 1024) {
-      showToast('error', 'Photo must be less than 2MB.');
-      return;
-    }
+    if (file.size > 2 * 1024 * 1024) { showToast('error', 'Photo must be less than 2MB.'); return; }
     try {
       setUploadingPhoto(true);
       await userService.uploadPhoto(id, file);
       showToast('success', 'Profile photo updated.');
-      loadProfile();
-    } catch (e) {
-      showToast('error', e?.response?.data?.message || 'Failed to upload photo.');
-    } finally {
-      setUploadingPhoto(false);
-      e.target.value = '';
-    }
+      loadData();
+    } catch { showToast('error', 'Failed to upload photo.'); }
+    finally { setUploadingPhoto(false); e.target.value = ''; }
   };
 
   const handleDeletePhoto = async () => {
     if (!confirm('Remove profile photo?')) return;
-    try {
-      await userService.deletePhoto(id);
-      showToast('success', 'Photo removed.');
-      loadProfile();
-    } catch {
-      showToast('error', 'Failed to remove photo.');
-    }
+    try { await userService.deletePhoto(id); showToast('success', 'Photo removed.'); loadData(); }
+    catch { showToast('error', 'Failed to remove photo.'); }
   };
 
-  // ── Section edit action button ────────────────────────────────────────────
-  const EditAction = ({ editing, onEdit, onSave, onCancel, saving }) => {
-    if (!canEdit) return null;
-    if (editing) {
-      return (
-        <div className="flex items-center gap-1.5">
-          <button onClick={onCancel}
-            className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
-            <X className="h-3.5 w-3.5" /> Cancel
-          </button>
-          <button onClick={onSave} disabled={saving}
-            className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors">
-            {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
-            Save
-          </button>
-        </div>
-      );
-    }
-    return (
-      <button onClick={onEdit}
-        className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
-        <Edit2 className="h-3.5 w-3.5" /> Edit
-      </button>
-    );
-  };
-
-  // ── Loading / not found states ────────────────────────────────────────────
+  // ── Loading / not found ───────────────────────────────────────────────────
   if (loading) {
     return (
       <DashboardLayout>
@@ -333,9 +518,7 @@ export default function UserProfilePage() {
         <div className="flex flex-col items-center justify-center py-24 text-gray-400">
           <AlertCircle className="h-10 w-10 mb-3 text-gray-200" />
           <p className="text-sm font-medium">Profile not found</p>
-          <button onClick={() => navigate(-1)} className="mt-4 text-sm text-indigo-600 hover:underline">
-            Go back
-          </button>
+          <button onClick={() => navigate(-1)} className="mt-4 text-sm text-indigo-600 hover:underline">Go back</button>
         </div>
       </DashboardLayout>
     );
@@ -343,92 +526,61 @@ export default function UserProfilePage() {
 
   const roleName = profile.roles?.[0]?.name;
 
-  const docOptions = [
-    { value: 'submitted',    label: '✓ Submitted' },
-    { value: 'pending',      label: '⏳ Pending'   },
-    { value: 'not_required', label: 'N/A'          },
-  ];
-
   return (
     <DashboardLayout>
       {/* ── Toast ─────────────────────────────────────────────────────────── */}
       {toast && (
         <div className={`fixed top-4 right-4 z-50 px-5 py-3 rounded-xl shadow-lg text-sm font-semibold flex items-center gap-2
           ${toast.type === 'success' ? 'bg-gray-900 text-white' : 'bg-red-500 text-white'}`}>
-          {toast.type === 'success'
-            ? <CheckCircle className="h-4 w-4 text-green-400" />
-            : <AlertCircle className="h-4 w-4" />}
+          {toast.type === 'success' ? <CheckCircle className="h-4 w-4 text-green-400" /> : <AlertCircle className="h-4 w-4" />}
           {toast.message}
         </div>
       )}
 
       {/* ── Lightbox ──────────────────────────────────────────────────────── */}
       {lightbox && profile.profile_photo_url && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-sm"
-          onClick={() => setLightbox(false)}
-        >
-          <div
-            className="relative flex flex-col items-center"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <img
-              src={profile.profile_photo_url}
-              alt={profile.name}
-              className="max-h-[80vh] max-w-[90vw] rounded-2xl shadow-2xl object-contain"
-            />
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-sm"
+          onClick={() => setLightbox(false)}>
+          <div className="relative flex flex-col items-center" onClick={(e) => e.stopPropagation()}>
+            <img src={profile.profile_photo_url} alt={profile.name}
+              className="max-h-[80vh] max-w-[90vw] rounded-2xl shadow-2xl object-contain" />
             <p className="mt-3 text-white/60 text-sm">{profile.name}</p>
-
-            {/* Close button */}
-            <button
-              onClick={() => setLightbox(false)}
-              className="absolute -top-3 -right-3 h-8 w-8 rounded-full bg-white shadow-md flex items-center justify-center text-gray-600 hover:text-gray-900 transition-colors"
-            >
+            <button onClick={() => setLightbox(false)}
+              className="absolute -top-3 -right-3 h-8 w-8 rounded-full bg-white shadow-md flex items-center justify-center text-gray-600 hover:text-gray-900">
               <X className="h-4 w-4" />
             </button>
           </div>
-
-          <p className="absolute bottom-6 text-white/30 text-xs select-none">
-            Click outside or press Esc to close
-          </p>
+          <p className="absolute bottom-6 text-white/30 text-xs select-none">Click outside or press Esc to close</p>
         </div>
       )}
 
       <div className="max-w-5xl mx-auto space-y-6">
 
-        {/* ── Back button ─────────────────────────────────────────────────── */}
+        {/* ── Back ────────────────────────────────────────────────────────── */}
         <button onClick={() => navigate(-1)}
           className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-800 transition-colors">
           <ArrowLeft className="h-4 w-4" /> Back to Internal Employees
         </button>
 
-        {/* ── Profile Hero Card ────────────────────────────────────────────── */}
+        {/* ── Hero Card ────────────────────────────────────────────────────── */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-          {/* Cover strip */}
-        <div className="h-24 bg-gradient-to-r from-orange-400 via-orange-500 to-red-500 flex items-center justify-center">
-  <span className="text-white/80 text-lg font-bold tracking-widest uppercase select-none">
-    Garuda Recruitment Agency
-  </span>
-</div>
+          <div className="h-24 bg-gradient-to-r from-orange-400 via-orange-500 to-red-500 flex items-center justify-center">
+            <span className="text-white/80 text-lg font-bold tracking-widest uppercase select-none">
+              Garuda Recruitment Agency
+            </span>
+          </div>
           <div className="px-6 pb-6">
             <div className="flex items-end justify-between -mt-12 mb-4">
-
-              {/* Avatar with upload + lightbox trigger */}
               <div className="relative">
                 <div
                   className={`h-24 w-24 rounded-2xl border-4 border-white shadow-md overflow-hidden bg-indigo-100 flex items-center justify-center
                     ${profile.profile_photo_url ? 'cursor-pointer group/avatar' : ''}`}
                   onClick={() => profile.profile_photo_url && setLightbox(true)}
-                  title={profile.profile_photo_url ? 'Click to view full photo' : ''}
                 >
                   {profile.profile_photo_url ? (
                     <>
-                      <img
-                        src={profile.profile_photo_url}
-                        alt={profile.name}
-                        className="h-full w-full object-cover transition-transform duration-200 group-hover/avatar:scale-105"
-                      />
-                      {/* Zoom overlay on hover */}
+                      <img src={profile.profile_photo_url} alt={profile.name}
+                        className="h-full w-full object-cover transition-transform duration-200 group-hover/avatar:scale-105" />
                       <div className="absolute inset-0 bg-black/0 group-hover/avatar:bg-black/30 transition-all duration-200 flex items-center justify-center rounded-xl">
                         <ZoomIn className="h-5 w-5 text-white opacity-0 group-hover/avatar:opacity-100 transition-opacity duration-200" />
                       </div>
@@ -438,37 +590,23 @@ export default function UserProfilePage() {
                       {profile.name?.charAt(0)?.toUpperCase() || '?'}
                     </span>
                   )}
-
-                  {/* Upload spinner */}
                   {uploadingPhoto && (
                     <div className="absolute inset-0 bg-black/50 flex items-center justify-center rounded-xl">
                       <Loader2 className="h-6 w-6 text-white animate-spin" />
                     </div>
                   )}
                 </div>
-
-                {/* Camera upload button */}
                 {canEdit && (
                   <>
-                    <button
-                      onClick={() => photoInputRef.current?.click()}
-                      className="absolute -bottom-1 -right-1 h-8 w-8 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white flex items-center justify-center shadow-md transition-colors z-10"
-                      title="Upload photo"
-                    >
+                    <button onClick={() => photoInputRef.current?.click()}
+                      className="absolute -bottom-1 -right-1 h-8 w-8 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white flex items-center justify-center shadow-md transition-colors z-10">
                       <Camera className="h-4 w-4" />
                     </button>
-                    <input
-                      ref={photoInputRef}
-                      type="file"
-                      accept="image/jpeg,image/png,image/webp"
-                      onChange={handlePhotoChange}
-                      className="hidden"
-                    />
+                    <input ref={photoInputRef} type="file" accept="image/jpeg,image/png,image/webp"
+                      onChange={handlePhotoChange} className="hidden" />
                   </>
                 )}
               </div>
-
-              {/* Remove photo + active status */}
               <div className="flex items-center gap-2 mt-14">
                 {canEdit && profile.profile_photo_url && (
                   <button onClick={handleDeletePhoto}
@@ -477,16 +615,12 @@ export default function UserProfilePage() {
                   </button>
                 )}
                 <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border
-                  ${profile.is_active
-                    ? 'bg-green-50 text-green-700 border-green-200'
-                    : 'bg-gray-100 text-gray-500 border-gray-200'}`}>
+                  ${profile.is_active ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-100 text-gray-500 border-gray-200'}`}>
                   <span className={`h-1.5 w-1.5 rounded-full ${profile.is_active ? 'bg-green-500' : 'bg-gray-400'}`} />
                   {profile.is_active ? 'Active' : 'Inactive'}
                 </span>
               </div>
             </div>
-
-            {/* Name + role */}
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <h1 className="text-xl font-bold text-gray-900">{profile.name}</h1>
@@ -505,250 +639,40 @@ export default function UserProfilePage() {
           </div>
         </div>
 
-        {/* ── Two column layout ────────────────────────────────────────────── */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-
-          {/* ── Personal Info ────────────────────────────────────────────── */}
-          <SectionCard
-            title="Personal Information"
-            icon={UserIcon}
-            iconColor="text-blue-500"
-            action={
-              <EditAction
-                editing={editingPersonal}
-                onEdit={() => setEditingPersonal(true)}
-                onSave={savePersonal}
-                onCancel={() => { setEditingPersonal(false); loadProfile(); }}
-                saving={savingSection === 'personal'}
+        {/* ── Dynamic Schema Sections ──────────────────────────────────────── */}
+        {schema.length === 0 ? (
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-8 text-center text-gray-400 text-sm">
+            No schema configured for this page yet.{' '}
+            <button onClick={() => navigate('/manage-columns/internal_employees')}
+              className="text-indigo-500 hover:underline">Configure schema</button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {schema.map((sec) => (
+              <SectionCard
+                key={sec.name}
+                title={sec.name}
+                fields={sec.fields}
+                profile={profile}
+                editing={!!editingSections[sec.name]}
+                saving={!!savingSections[sec.name]}
+                canEdit={canEdit}
+                formValues={sectionForms[sec.name] || {}}
+                onEdit={() => setEditingSections((s) => ({ ...s, [sec.name]: true }))}
+                onCancel={() => {
+                  setEditingSections((s) => ({ ...s, [sec.name]: false }));
+                  setSectionForms((prev) => ({
+                    ...prev,
+                    [sec.name]: buildFormForSection(sec.fields, profile),
+                  }));
+                }}
+                onSave={() => saveSection(sec.name, sec.fields)}
+                onFieldChange={(fieldKey, value) => handleFieldChange(sec.name, fieldKey, value)}
               />
-            }
-          >
-            {editingPersonal ? (
-              <div className="grid grid-cols-2 gap-4">
-                <div className="col-span-2">
-                  <EditableField label="Full Name" value={personalForm.name}
-                    onChange={(v) => setPersonalForm((f) => ({ ...f, name: v }))} />
-                </div>
-                <div className="col-span-2">
-                  <EditableField label="Email" type="email" value={personalForm.email}
-                    onChange={(v) => setPersonalForm((f) => ({ ...f, email: v }))} />
-                </div>
-                <EditableField label="Contact Number" value={personalForm.contact_number}
-                  onChange={(v) => setPersonalForm((f) => ({ ...f, contact_number: v }))} />
-                <EditableField label="Date of Birth" type="date" value={personalForm.date_of_birth}
-                  onChange={(v) => setPersonalForm((f) => ({ ...f, date_of_birth: v }))} />
-                <EditableField label="Gender" value={personalForm.gender}
-                  options={[
-                    { value: '',         label: '— Select —' },
-                    { value: 'Male',     label: 'Male'       },
-                    { value: 'Female',   label: 'Female'     },
-                    { value: 'Other',    label: 'Other'      },
-                  ]}
-                  onChange={(v) => setPersonalForm((f) => ({ ...f, gender: v }))} />
-                <EditableField label="Civil Status" value={personalForm.civil_status}
-                  options={[
-                    { value: '',          label: '— Select —' },
-                    { value: 'Single',    label: 'Single'     },
-                    { value: 'Married',   label: 'Married'    },
-                    { value: 'Widowed',   label: 'Widowed'    },
-                    { value: 'Separated', label: 'Separated'  },
-                  ]}
-                  onChange={(v) => setPersonalForm((f) => ({ ...f, civil_status: v }))} />
-                <div className="col-span-2">
-                  <label className="text-xs font-medium text-gray-400 uppercase tracking-wide">Address</label>
-                  <textarea
-                    value={personalForm.address || ''}
-                    onChange={(e) => setPersonalForm((f) => ({ ...f, address: e.target.value }))}
-                    rows={2}
-                    className="mt-1 w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
-                  />
-                </div>
-                <EditableField label="Emergency Contact Name" value={personalForm.emergency_contact_name}
-                  onChange={(v) => setPersonalForm((f) => ({ ...f, emergency_contact_name: v }))} />
-                <EditableField label="Emergency Contact No." value={personalForm.emergency_contact_number}
-                  onChange={(v) => setPersonalForm((f) => ({ ...f, emergency_contact_number: v }))} />
-              </div>
-            ) : (
-              <div className="grid grid-cols-2 gap-4">
-                <div className="col-span-2"><FieldRow label="Full Name" value={profile.name} /></div>
-                <div className="col-span-2"><FieldRow label="Email" value={profile.email} /></div>
-                <FieldRow label="Contact Number"  value={profile.contact_number} />
-                <FieldRow label="Date of Birth"   value={fmt(profile.date_of_birth)} />
-                <FieldRow label="Gender"          value={profile.gender} />
-                <FieldRow label="Civil Status"    value={profile.civil_status} />
-                <div className="col-span-2"><FieldRow label="Address" value={profile.address} /></div>
-                <FieldRow label="Emergency Contact"     value={profile.emergency_contact_name} />
-                <FieldRow label="Emergency Contact No." value={profile.emergency_contact_number} />
-              </div>
-            )}
-          </SectionCard>
+            ))}
+          </div>
+        )}
 
-          {/* ── Employment Details ───────────────────────────────────────── */}
-          <SectionCard
-            title="Employment Details"
-            icon={Briefcase}
-            iconColor="text-indigo-500"
-            action={
-              canManage && (
-                <EditAction
-                  editing={editingEmployment}
-                  onEdit={() => setEditingEmployment(true)}
-                  onSave={saveEmployment}
-                  onCancel={() => { setEditingEmployment(false); loadProfile(); }}
-                  saving={savingSection === 'employment'}
-                />
-              )
-            }
-          >
-            {editingEmployment ? (
-              <div className="grid grid-cols-2 gap-4">
-                <div className="col-span-2">
-                  <EditableField label="Department / Role" value={employmentForm.role}
-                    options={[
-                      { value: 'hr_admin',          label: 'HR Admin'           },
-                      { value: 'talent_acquisition', label: 'Talent Acquisition' },
-                      { value: 'accounting',         label: 'Accounting'         },
-                      { value: 'marketing',          label: 'Marketing'          },
-                      { value: 'super_admin',        label: 'Super Admin'        },
-                    ]}
-                    onChange={(v) => setEmploymentForm((f) => ({ ...f, role: v }))} />
-                </div>
-                <div className="col-span-2">
-                  <EditableField label="Date Hired" type="date" value={employmentForm.date_hired}
-                    onChange={(v) => setEmploymentForm((f) => ({ ...f, date_hired: v }))} />
-                </div>
-              </div>
-            ) : (
-              <div className="grid grid-cols-2 gap-4">
-                <div className="col-span-2">
-                  <div className="flex flex-col gap-0.5">
-                    <span className="text-xs font-medium text-gray-400 uppercase tracking-wide">Department</span>
-                    <div className="mt-1"><RoleBadge role={roleName} /></div>
-                  </div>
-                </div>
-                <div className="col-span-2">
-                  <FieldRow label="Date Hired" value={fmt(profile.date_hired)} />
-                </div>
-                <div className="col-span-2">
-                  <div className="flex flex-col gap-1">
-                    <span className="text-xs font-medium text-gray-400 uppercase tracking-wide">Assigned Branches</span>
-                    <div className="flex flex-wrap gap-1.5 mt-1">
-                      {profile.branches?.length > 0
-                        ? profile.branches.map((b) => (
-                            <span key={b.id} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs bg-purple-50 text-purple-700 border border-purple-100">
-                              <Building2 className="h-3 w-3" /> {b.branch_name}
-                            </span>
-                          ))
-                        : <span className="text-sm text-gray-400">—</span>}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-          </SectionCard>
-
-          {/* ── Government IDs ───────────────────────────────────────────── */}
-          <SectionCard
-            title="Government IDs"
-            icon={CreditCard}
-            iconColor="text-amber-500"
-            action={
-              canManage && (
-                <EditAction
-                  editing={editingGovIds}
-                  onEdit={() => setEditingGovIds(true)}
-                  onSave={saveGovIds}
-                  onCancel={() => { setEditingGovIds(false); loadProfile(); }}
-                  saving={savingSection === 'govids'}
-                />
-              )
-            }
-          >
-            {editingGovIds ? (
-              <div className="grid grid-cols-2 gap-4">
-                {[
-                  { field: 'sss',        label: 'SSS No.'       },
-                  { field: 'pagibig',    label: 'Pag-IBIG No.'  },
-                  { field: 'philhealth', label: 'PhilHealth No.' },
-                  { field: 'tin',        label: 'TIN No.'        },
-                ].map(({ field, label }) => (
-                  <EditableField key={field} label={label} value={govIdsForm[field]} mono
-                    onChange={(v) => setGovIdsForm((f) => ({ ...f, [field]: v }))} />
-                ))}
-              </div>
-            ) : (
-              <div className="grid grid-cols-2 gap-4">
-                <FieldRow label="SSS No."        value={profile.sss}        mono />
-                <FieldRow label="Pag-IBIG No."   value={profile.pagibig}    mono />
-                <FieldRow label="PhilHealth No." value={profile.philhealth} mono />
-                <FieldRow label="TIN No."        value={profile.tin}        mono />
-              </div>
-            )}
-          </SectionCard>
-
-          {/* ── Requirements / Documents ─────────────────────────────────── */}
-          <SectionCard
-            title="Requirements & Documents"
-            icon={FileText}
-            iconColor="text-green-500"
-            action={
-              canManage && (
-                <EditAction
-                  editing={editingRequirements}
-                  onEdit={() => setEditingRequirements(true)}
-                  onSave={saveRequirements}
-                  onCancel={() => { setEditingRequirements(false); loadProfile(); }}
-                  saving={savingSection === 'requirements'}
-                />
-              )
-            }
-          >
-            {editingRequirements ? (
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  {[
-                    { field: 'nbi_status',              label: 'NBI Clearance'    },
-                    { field: 'medcert_status',           label: 'Medical Cert.'    },
-                    { field: 'police_clearance_status',  label: 'Police Clearance' },
-                    { field: 'contract_status',          label: 'Contract'         },
-                  ].map(({ field, label }) => (
-                    <EditableField key={field} label={label} value={requirementsForm[field]}
-                      options={docOptions}
-                      onChange={(v) => setRequirementsForm((f) => ({ ...f, [field]: v }))} />
-                  ))}
-                </div>
-                <div className="pt-3 border-t border-gray-100">
-                  <EditableField label="Overall Requirements Status" value={requirementsForm.requirements_status}
-                    options={[
-                      { value: 'complete',   label: '✓ Complete'   },
-                      { value: 'incomplete', label: '✗ Incomplete' },
-                      { value: 'pending',    label: '⏳ Pending'    },
-                    ]}
-                    onChange={(v) => setRequirementsForm((f) => ({ ...f, requirements_status: v }))} />
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {[
-                  { label: 'NBI Clearance',   value: profile.nbi_status              },
-                  { label: 'Medical Cert.',    value: profile.medcert_status          },
-                  { label: 'Police Clearance', value: profile.police_clearance_status },
-                  { label: 'Contract',         value: profile.contract_status         },
-                ].map(({ label, value }) => (
-                  <div key={label} className="flex items-center justify-between">
-                    <span className="text-sm text-gray-500">{label}</span>
-                    <DocStatusBadge status={value} />
-                  </div>
-                ))}
-                <div className="pt-3 mt-1 border-t border-gray-100 flex items-center justify-between">
-                  <span className="text-sm font-medium text-gray-700">Overall Status</span>
-                  <ReqBadge status={profile.requirements_status} />
-                </div>
-              </div>
-            )}
-          </SectionCard>
-
-        </div>
       </div>
     </DashboardLayout>
   );

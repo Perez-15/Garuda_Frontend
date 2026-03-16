@@ -19,6 +19,7 @@ import {
   UserCheck,
   UserCog,
   Clock,
+  Settings2,
 } from 'lucide-react';
 
 export default function DashboardLayout({ children }) {
@@ -114,6 +115,10 @@ export default function DashboardLayout({ children }) {
     ...(userRole === 'super_admin' || userRole === 'hr_admin'
       ? [{ name: 'Users', href: '/users', icon: UsersIcon }]
       : []),
+
+      ...(userRole === 'super_admin' || userRole === 'hr_admin'
+  ? [{ name: 'Manage Columns', href: '/manage-columns', icon: Settings2 }]
+  : []),
   ];
 
   // ── Logo ───────────────────────────────────────────────────────────────────

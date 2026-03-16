@@ -33,6 +33,10 @@ import UsersPage           from './pages/Users/UsersPage';
 import AttendancePage     from './pages/Attendance/Attendancepage';
 import TeamAttendancePage from './pages/Attendance/Teamattendancepage';
 
+//Manage Columns
+ import ManageColumnsPage from './pages/ManageColumn/Managecolumnspage';
+ import SchemaEditorPage  from './pages/ManageColumn/Schemaeditorpage';
+
 function App() {
   return (
     <AuthProvider>
@@ -83,7 +87,10 @@ function App() {
 
           {/* ── Positions ──────────────────────────────────────────────────── */}
           <Route path="/positions"      element={<ProtectedRoute><PositionsPage /></ProtectedRoute>} />
-
+            
+{/* ── Manage Columns ─────────────────────────────────────────────── */}
+<Route path="/manage-columns"       element={<ProtectedRoute><ManageColumnsPage /></ProtectedRoute>} />
+<Route path="/manage-columns/:page" element={<ProtectedRoute><SchemaEditorPage /></ProtectedRoute>} />
 
           {/* ── Fallbacks ──────────────────────────────────────────────────── */}
           <Route path="/"  element={<Navigate to="/dashboard" replace />} />

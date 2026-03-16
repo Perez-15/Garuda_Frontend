@@ -10,6 +10,7 @@ import DashboardLayout from '../../components/layout/DashboardLayout';
 import { userService } from '../../services/userService';
 import { customColumnService } from '../../services/customcolumnService';
 import { useAuth } from '../../contexts/AuthContext';
+import { useNavigate } from 'react-router-dom';
 
 const PAGE = 'internal_employees';
 
@@ -467,7 +468,7 @@ function ManageColumnsModal({ customCols, onClose, onRefresh }) {
 // ─────────────────────────────────────────────────────────────────────────────
 export default function InternalEmployeesPage() {
   const { user: currentUser } = useAuth();
-
+  const navigate = useNavigate(); 
   const [users,       setUsers]       = useState([]);
   const [customCols,  setCustomCols]  = useState([]);
   const [loading,     setLoading]     = useState(true);
@@ -588,12 +589,12 @@ export default function InternalEmployeesPage() {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            {canManage && (
-              <button onClick={() => setShowManageCols(true)}
-                className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors shadow-sm">
-                <Settings2 className="h-4 w-4" /> Manage Columns
-              </button>
-            )}
+{canManage && (
+  <button onClick={() => navigate('/manage-columns')}
+    className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors shadow-sm">
+    <Settings2 className="h-4 w-4" /> Manage Columns
+  </button>
+)}
             {canManage && (
               <button onClick={() => setShowAddModal(true)}
                 className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-colors shadow-sm">
