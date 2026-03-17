@@ -56,6 +56,13 @@ export const employeeService = {
     return response.data;
   },
 
+  updateHrAction: async (employeeId, actionId, data) => {
+  const response = await apiClient.patch(
+    `/employees/${employeeId}/hr-actions/${actionId}`, data
+  );
+  return response.data;
+},
+
   // ── Delete ──────────────────────────────────────────────────────────────────
 
   delete: async (id) => {

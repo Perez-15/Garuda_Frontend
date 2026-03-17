@@ -2,15 +2,35 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, Edit2, Save, X, Loader2, Trash2,
-  User, Phone, Briefcase, Calendar,
-  Shield, FileText, AlertTriangle, ChevronDown,
-  Building2, Heart, Plus, LayoutGrid,
+  User, Briefcase, Calendar, Shield, FileText,
+  AlertTriangle, ChevronDown, Building2, Plus, LayoutGrid,
+  CheckCircle, Clock, XCircle,
 } from 'lucide-react';
 import DashboardLayout from '../../../components/layout/DashboardLayout';
 import { employeeService } from '../../../services/hiredService';
 import { branchService } from '../../../services/branchService';
-import { positionService } from '../../../services/positionService';
 import { customColumnService } from '../../../services/customcolumnService';
+
+// ── All 11 document fields ────────────────────────────────────────────────────
+const DOCUMENT_FIELDS = [
+  { label: 'PSA / Birth Certificate',         statusKey: 'psa_status',                expiryKey: null             },
+  { label: 'SSS Document',                    statusKey: 'sss_document_status',        expiryKey: null             },
+  { label: 'PhilHealth Document',             statusKey: 'philhealth_document_status', expiryKey: null             },
+  { label: 'Pag-ibig Document',               statusKey: 'pagibig_document_status',    expiryKey: null             },
+  { label: 'TIN Document',                    statusKey: 'tin_document_status',        expiryKey: null             },
+  { label: 'NBI / Police Clearance',          statusKey: 'nbi_status',                expiryKey: 'nbi_expiry'     },
+  { label: 'Medical Basic 5 / Drug Test',     statusKey: 'medcert_status',             expiryKey: 'medcert_expiry' },
+  { label: 'Certificate of Employment (COE)', statusKey: 'coe_status',                 expiryKey: null             },
+  { label: 'TOR / Diploma',                   statusKey: 'tor_diploma_status',         expiryKey: null             },
+  { label: 'Photocopy of Valid ID',           statusKey: 'valid_id_status',            expiryKey: null             },
+  { label: '2pcs 1x1 Picture',               statusKey: 'picture_1x1_status',          expiryKey: null             },
+];
+
+const DOC_STATUS_OPTIONS = [
+  { value: 'submitted',    label: 'Submitted'    },
+  { value: 'pending',      label: 'Pending'      },
+  { value: 'not_required', label: 'Not Required' },
+];
 
 // ── Status badge ──────────────────────────────────────────────────────────────
 function StatusBadge({ status }) {
@@ -22,7 +42,7 @@ function StatusBadge({ status }) {
     awol:       'bg-purple-100 text-purple-700 border-purple-200',
   };
   return (
-    <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border capitalize ${map[status] || 'bg-gray-100 text-gray-600 border-gray-200'}`}>
+    <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border capitalize ${map[status] || 'bg-green-100 text-green-700 border-green-200'}`}>
       {status ?? 'Active'}
     </span>
   );
@@ -44,27 +64,17 @@ function ReqBadge({ status }) {
 }
 
 // ── Doc status badge ──────────────────────────────────────────────────────────
-function DocStatus({ status, label, expiry }) {
+function DocStatusBadge({ status }) {
   const map = {
-    submitted:    { cls: 'bg-green-50 text-green-700 border-green-200',    icon: '✓'  },
-    pending:      { cls: 'bg-yellow-50 text-yellow-700 border-yellow-200', icon: '⏳' },
-    not_required: { cls: 'bg-gray-50 text-gray-400 border-gray-200',       icon: '—'  },
+    submitted:    { icon: <CheckCircle className="h-3.5 w-3.5" />, label: 'Submitted',    cls: 'bg-green-50 text-green-700 border-green-200'   },
+    pending:      { icon: <Clock className="h-3.5 w-3.5" />,       label: 'Pending',      cls: 'bg-yellow-50 text-yellow-700 border-yellow-200' },
+    not_required: { icon: <XCircle className="h-3.5 w-3.5" />,     label: 'Not Required', cls: 'bg-gray-50 text-gray-400 border-gray-200'      },
   };
-  const s = map[status] || map.pending;
+  const s = map[status] || map['pending'];
   return (
-    <div className="flex items-center justify-between py-2.5 border-b border-gray-50 last:border-0">
-      <span className="text-sm text-gray-600">{label}</span>
-      <div className="flex items-center gap-2">
-        {expiry && (
-          <span className="text-xs text-gray-400">
-            Exp: {new Date(expiry).toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' })}
-          </span>
-        )}
-        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${s.cls}`}>
-          {s.icon} {status === 'not_required' ? 'N/A' : status === 'submitted' ? 'Submitted' : 'Pending'}
-        </span>
-      </div>
-    </div>
+    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${s.cls}`}>
+      {s.icon} {s.label}
+    </span>
   );
 }
 
@@ -85,7 +95,9 @@ function SectionCard({ title, icon: Icon, iconColor = 'text-blue-500', children,
     <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
       <div className="flex items-center justify-between px-5 py-4 border-b border-gray-50">
         <div className="flex items-center gap-2">
-          <Icon className={`h-4 w-4 ${iconColor}`} />
+          <div className={`p-1.5 rounded-lg bg-gray-50 ${iconColor}`}>
+            <Icon className="h-4 w-4" />
+          </div>
           <h3 className="text-sm font-semibold text-gray-800">{title}</h3>
         </div>
         {action}
@@ -98,20 +110,39 @@ function SectionCard({ title, icon: Icon, iconColor = 'text-blue-500', children,
 // ── Info row ──────────────────────────────────────────────────────────────────
 function InfoRow({ label, value }) {
   return (
-    <div className="flex items-start justify-between py-2 border-b border-gray-50 last:border-0 gap-4">
-      <span className="text-xs font-medium text-gray-400 uppercase tracking-wide flex-shrink-0 w-36">{label}</span>
-      <span className="text-sm text-gray-700 text-right">{value || '—'}</span>
+    <div className="flex items-center justify-between py-2.5 border-b border-gray-50 last:border-0 gap-4">
+      <span className="text-sm text-gray-400 w-44 flex-shrink-0">{label}</span>
+      <div className="flex-1 flex justify-end">
+        <span className="text-sm text-gray-800 text-right">{value || '—'}</span>
+      </div>
+    </div>
+  );
+}
+
+// ── Doc row ───────────────────────────────────────────────────────────────────
+function DocRow({ label, status, expiry }) {
+  return (
+    <div className="flex items-center justify-between py-2.5 border-b border-gray-50 last:border-0 gap-4">
+      <span className="text-sm text-gray-600 flex-1">{label}</span>
+      <div className="flex items-center gap-2 flex-shrink-0">
+        {expiry && (
+          <span className="text-xs text-gray-400">
+            Exp: {new Date(expiry).toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' })}
+          </span>
+        )}
+        <DocStatusBadge status={status} />
+      </div>
     </div>
   );
 }
 
 // ── Field input (edit mode) ───────────────────────────────────────────────────
 function Field({ label, name, type = 'text', value, onChange, options, required, placeholder }) {
-  const base = "w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent";
+  const base = "w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white";
   if (options) {
     return (
       <div>
-        <label className="block text-xs font-medium text-gray-500 mb-1">
+        <label className="block text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">
           {label}{required && <span className="text-red-400 ml-0.5">*</span>}
         </label>
         <select name={name} value={value || ''} onChange={onChange} className={base}>
@@ -123,7 +154,7 @@ function Field({ label, name, type = 'text', value, onChange, options, required,
   }
   return (
     <div>
-      <label className="block text-xs font-medium text-gray-500 mb-1">
+      <label className="block text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">
         {label}{required && <span className="text-red-400 ml-0.5">*</span>}
       </label>
       <input
@@ -137,56 +168,99 @@ function Field({ label, name, type = 'text', value, onChange, options, required,
 
 // ── Tabs ──────────────────────────────────────────────────────────────────────
 const TABS = [
-  { key: 'personal',      label: 'Personal Info',  icon: User          },
-  { key: 'employment',    label: 'Employment',      icon: Briefcase     },
-  { key: 'documents',     label: '201 / Documents', icon: Shield        },
-  { key: 'hr_actions',    label: 'HR Actions',      icon: AlertTriangle },
-  { key: 'custom_fields', label: 'Custom Fields',   icon: LayoutGrid    },
+  { key: 'personal',      label: 'All Information', icon: User          },
+  { key: 'employment',    label: 'Employment',       icon: Briefcase     },
+  { key: 'documents',     label: '201 / Documents',  icon: Shield        },
+  { key: 'hr_actions',    label: 'HR Actions',       icon: AlertTriangle },
+  { key: 'custom_fields', label: 'Custom Fields',    icon: LayoutGrid    },
 ];
+
+// ── Shared documents view ─────────────────────────────────────────────────────
+function DocumentsView({ employee }) {
+  return (
+    <>
+      <div className="flex items-center gap-3 mb-3 pb-3 border-b border-gray-50">
+        <span className="text-sm text-gray-400">Overall Status:</span>
+        <ReqBadge status={employee.requirements_status} />
+      </div>
+      {DOCUMENT_FIELDS.map(({ label, statusKey, expiryKey }) => (
+        <DocRow
+          key={statusKey}
+          label={label}
+          status={employee[statusKey]}
+          expiry={expiryKey ? employee[expiryKey] : null}
+        />
+      ))}
+    </>
+  );
+}
+
+// ── Shared documents edit ─────────────────────────────────────────────────────
+function DocumentsEdit({ form, handleChange }) {
+  return (
+    <div className="space-y-3">
+      {DOCUMENT_FIELDS.map(({ label, statusKey, expiryKey }) => (
+        <div key={statusKey} className="border border-gray-100 rounded-lg p-3 space-y-2">
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{label}</p>
+          <div className={`grid gap-2 ${expiryKey ? 'grid-cols-2' : 'grid-cols-1'}`}>
+            <Field
+              label="Status"
+              name={statusKey}
+              value={form[statusKey]}
+              onChange={handleChange}
+              options={DOC_STATUS_OPTIONS}
+            />
+            {expiryKey && (
+              <Field label="Expiry Date" name={expiryKey} type="date" value={form[expiryKey]} onChange={handleChange} />
+            )}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Main Page
 // ─────────────────────────────────────────────────────────────────────────────
 export default function EmployeeDetailPage() {
-  const { id } = useParams();
+  const params = useParams();
+  const id = params.id || params.employeeId;
   const navigate = useNavigate();
 
   const [employee,  setEmployee]  = useState(null);
   const [loading,   setLoading]   = useState(true);
   const [activeTab, setActiveTab] = useState('personal');
 
-  // ── Edit state ────────────────────────────────────────────────────────────
   const [isEditing, setIsEditing] = useState(false);
   const [saving,    setSaving]    = useState(false);
   const [form,      setForm]      = useState({});
 
-  // ── Dropdown data for edit mode ───────────────────────────────────────────
-  const [branches,  setBranches]  = useState([]);
-  const [positions, setPositions] = useState([]);
+  const [branches, setBranches] = useState([]);
 
-  // ── Status change ─────────────────────────────────────────────────────────
   const [showStatusMenu, setShowStatusMenu] = useState(false);
   const [changingStatus, setChangingStatus] = useState(false);
 
-  // ── HR Action modal ───────────────────────────────────────────────────────
   const [showHrModal, setShowHrModal] = useState(false);
   const [hrForm,      setHrForm]      = useState({ type: 'memo', subject: '', description: '', action_date: '', loa_start: '', loa_end: '' });
   const [savingHr,    setSavingHr]    = useState(false);
 
-  // ── Custom fields ─────────────────────────────────────────────────────────
   const [customCols,   setCustomCols]   = useState([]);
   const [customForm,   setCustomForm]   = useState({});
   const [savingCustom, setSavingCustom] = useState(false);
   const [customSaved,  setCustomSaved]  = useState(false);
 
+  const [editingHrId,  setEditingHrId]  = useState(null);
+  const [editHrForm,   setEditHrForm]   = useState({});
+  const [savingEditHr, setSavingEditHr] = useState(false);
+
   useEffect(() => {
+    if (!id) return;
     fetchEmployee();
     fetchCustomCols();
     fetchBranches();
-    fetchPositions();
   }, [id]);
 
-  // ── Fetchers ──────────────────────────────────────────────────────────────
   const fetchEmployee = async () => {
     try {
       setLoading(true);
@@ -205,60 +279,57 @@ export default function EmployeeDetailPage() {
     try {
       const res = await customColumnService.getByPage('hired');
       setCustomCols(Array.isArray(res) ? res : []);
-    } catch (e) { console.error('Could not load custom columns:', e); }
+    } catch (e) { console.error(e); }
   };
 
   const fetchBranches = async () => {
     try {
       const res = await branchService.getAll();
       setBranches(res.data || res);
-    } catch (e) { console.error('Could not load branches:', e); }
+    } catch (e) { console.error(e); }
   };
 
-  const fetchPositions = async () => {
-    try {
-      const res = await positionService.getAll();
-      setPositions(res.data || res);
-    } catch (e) { console.error('Could not load positions:', e); }
+  const buildDocFields = (emp) => {
+    const fields = {};
+    DOCUMENT_FIELDS.forEach(({ statusKey, expiryKey }) => {
+      fields[statusKey] = emp[statusKey] || 'pending';
+      if (expiryKey) fields[expiryKey] = emp[expiryKey]?.substring(0, 10) || '';
+    });
+    return fields;
   };
 
-  // ── Init form — ALL editable fields ──────────────────────────────────────
   const initForm = (emp) => {
     setForm({
       // Personal
-      full_name:                  emp.full_name                || '',
-      date_of_birth:              emp.date_of_birth            || '',
-      gender:                     emp.gender                   || '',
-      civil_status:               emp.civil_status             || '',
+      full_name:                emp.full_name                        || '',
+      date_of_birth:            emp.date_of_birth?.substring(0, 10) || '',
+      gender:                   emp.gender                           || '',
+      civil_status:             emp.civil_status                     || '',
       // Contact
-      contact_number:             emp.contact_number           || '',
-      email:                      emp.email                    || '',
-      address:                    emp.address                  || '',
+      contact_number:           emp.contact_number                   || '',
+      email:                    emp.email                            || '',
+      address:                  emp.address                          || '',
       // Emergency
-      emergency_contact_name:     emp.emergency_contact_name   || '',
-      emergency_contact_number:   emp.emergency_contact_number || '',
+      emergency_contact_name:   emp.emergency_contact_name           || '',
+      emergency_contact_number: emp.emergency_contact_number         || '',
       // Government IDs
-      sss:                        emp.sss                      || '',
-      pagibig:                    emp.pagibig                  || '',
-      philhealth:                 emp.philhealth               || '',
-      tin:                        emp.tin                      || '',
-      // Documents
-      nbi_status:                 emp.nbi_status               || 'pending',
-      nbi_expiry:                 emp.nbi_expiry               || '',
-      police_clearance_status:    emp.police_clearance_status  || 'pending',
-      police_clearance_expiry:    emp.police_clearance_expiry  || '',
-      medcert_status:             emp.medcert_status           || 'pending',
-      medcert_expiry:             emp.medcert_expiry           || '',
-      requirements_status:        emp.requirements_status      || 'pending',
+      sss:                      emp.sss                              || '',
+      pagibig:                  emp.pagibig                          || '',
+      philhealth:               emp.philhealth                       || '',
+      tin:                      emp.tin                              || '',
+      // Overall requirements
+      requirements_status:      emp.requirements_status              || 'pending',
+      // All 11 document fields
+      ...buildDocFields(emp),
       // Employment
-      branch_id:                  emp.branch_id                || '',
-      position_id:                emp.position_id              || '',
-      date_hired:                 emp.date_hired               || '',
-      date_resigned:              emp.date_resigned            || '',
-      date_ended:                 emp.date_ended               || '',
-      daily_rate:                 emp.daily_rate               || '',
-      source:                     emp.source                   || '',
-      remarks:                    emp.remarks                  || '',
+      branch_id:                emp.branch_id                        || '',
+      position:                 emp.position                         || '',  // plain text
+      date_hired:               emp.date_hired?.substring(0, 10)     || '',
+      date_resigned:            emp.date_resigned?.substring(0, 10)  || '',
+      date_ended:               emp.date_ended?.substring(0, 10)     || '',
+      daily_rate:               emp.daily_rate                       || '',
+      source:                   emp.source                           || '',
+      remarks:                  emp.remarks                          || '',
     });
   };
 
@@ -322,6 +393,32 @@ export default function EmployeeDetailPage() {
     }
   };
 
+  const handleEditHrAction = (action) => {
+    setEditingHrId(action.id);
+    setEditHrForm({
+      type:        action.type,
+      subject:     action.subject        || '',
+      description: action.description   || '',
+      action_date: action.action_date?.substring(0, 10) || '',
+      loa_start:   action.loa_start?.substring(0, 10)   || '',
+      loa_end:     action.loa_end?.substring(0, 10)     || '',
+    });
+  };
+
+  const handleUpdateHrAction = async (actionId) => {
+    try {
+      setSavingEditHr(true);
+      await employeeService.updateHrAction(id, actionId, editHrForm);
+      setEditingHrId(null);
+      fetchEmployee();
+    } catch (e) {
+      console.error(e);
+      alert('Failed to update HR action.');
+    } finally {
+      setSavingEditHr(false);
+    }
+  };
+
   const handleDeleteHrAction = async (actionId) => {
     if (!confirm('Delete this HR action?')) return;
     try {
@@ -348,7 +445,19 @@ export default function EmployeeDetailPage() {
   const fmt = (date) =>
     date ? new Date(date).toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' }) : '—';
 
-  // ── Loading / not found ───────────────────────────────────────────────────
+  const hrActions = employee?.hr_actions ?? [];
+
+  if (!id) {
+    return (
+      <DashboardLayout>
+        <div className="text-center py-16 text-gray-400">
+          <p className="text-sm">Invalid employee link.</p>
+          <button onClick={() => navigate('/employees')} className="mt-3 text-blue-600 text-sm hover:underline">← Back to Employees</button>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
   if (loading) {
     return (
       <DashboardLayout>
@@ -365,9 +474,7 @@ export default function EmployeeDetailPage() {
       <DashboardLayout>
         <div className="text-center py-16 text-gray-400">
           <p className="text-sm">Employee not found.</p>
-          <button onClick={() => navigate('/employees')} className="mt-3 text-blue-600 text-sm hover:underline">
-            ← Back to Employees
-          </button>
+          <button onClick={() => navigate('/employees')} className="mt-3 text-blue-600 text-sm hover:underline">← Back to Employees</button>
         </div>
       </DashboardLayout>
     );
@@ -375,7 +482,7 @@ export default function EmployeeDetailPage() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-5">
+      <div className="max-w-6xl mx-auto space-y-5">
 
         {/* ── Header ───────────────────────────────────────────────────── */}
         <div className="flex items-start justify-between">
@@ -390,8 +497,9 @@ export default function EmployeeDetailPage() {
               <ReqBadge status={employee.requirements_status} />
             </div>
             <div className="flex items-center gap-3 mt-1.5 text-sm text-gray-500 flex-wrap">
-              {employee.position?.name && (
-                <span className="flex items-center gap-1"><Briefcase className="h-3.5 w-3.5" /> {employee.position.name}</span>
+              {/* position is now plain text */}
+              {employee.position && (
+                <span className="flex items-center gap-1"><Briefcase className="h-3.5 w-3.5" /> {employee.position}</span>
               )}
               {employee.branch?.branch_name && (
                 <span className="flex items-center gap-1"><Building2 className="h-3.5 w-3.5" /> {employee.branch.branch_name}</span>
@@ -402,7 +510,6 @@ export default function EmployeeDetailPage() {
             </div>
           </div>
 
-          {/* Action buttons */}
           <div className="flex items-center gap-2 flex-shrink-0">
             {!isEditing ? (
               <>
@@ -462,9 +569,9 @@ export default function EmployeeDetailPage() {
                 ${activeTab === tab.key ? 'bg-gray-900 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'}`}>
               <tab.icon className="h-4 w-4" />
               {tab.label}
-              {tab.key === 'hr_actions' && employee.hr_actions?.length > 0 && (
+              {tab.key === 'hr_actions' && hrActions.length > 0 && (
                 <span className={`text-xs px-1.5 py-0.5 rounded-full font-semibold ${activeTab === tab.key ? 'bg-white/20 text-white' : 'bg-red-100 text-red-600'}`}>
-                  {employee.hr_actions.length}
+                  {hrActions.length}
                 </span>
               )}
               {tab.key === 'custom_fields' && customCols.length > 0 && (
@@ -477,23 +584,31 @@ export default function EmployeeDetailPage() {
         </div>
 
         {/* ════════════════════════════════════════════════════════════════
-            Tab: PERSONAL INFO
+            Tab: ALL INFORMATION
         ════════════════════════════════════════════════════════════════ */}
         {activeTab === 'personal' && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
 
-            <SectionCard title="Basic Information" icon={User} iconColor="text-blue-500">
+            {/* Personal Information */}
+            <SectionCard title="Personal Information" icon={User} iconColor="text-blue-500">
               {!isEditing ? (
-                <>
-                  <InfoRow label="Full Name"     value={employee.full_name} />
-                  <InfoRow label="Date of Birth" value={fmt(employee.date_of_birth)} />
-                  <InfoRow label="Age"           value={employee.age} />
-                  <InfoRow label="Gender"        value={employee.gender} />
-                  <InfoRow label="Civil Status"  value={employee.civil_status} />
-                </>
+                <div className="divide-y divide-gray-50">
+                  <InfoRow label="Full Name"        value={employee.full_name} />
+                  <InfoRow label="Date of Birth"    value={fmt(employee.date_of_birth)} />
+                  <InfoRow label="Age"              value={employee.age} />
+                  <InfoRow label="Gender"           value={employee.gender} />
+                  <InfoRow label="Civil Status"     value={employee.civil_status} />
+                  <InfoRow label="Contact No."      value={employee.contact_number} />
+                  <InfoRow label="Email"            value={employee.email} />
+                  <InfoRow label="Address"          value={employee.address} />
+                  <InfoRow label="Emergency Name"   value={employee.emergency_contact_name} />
+                  <InfoRow label="Emergency No."    value={employee.emergency_contact_number} />
+                </div>
               ) : (
-                <div className="space-y-3">
-                  <Field label="Full Name"     name="full_name"     value={form.full_name}     onChange={handleChange} required />
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="col-span-2">
+                    <Field label="Full Name" name="full_name" value={form.full_name} onChange={handleChange} required />
+                  </div>
                   <Field label="Date of Birth" name="date_of_birth" type="date" value={form.date_of_birth} onChange={handleChange} />
                   <Field label="Gender" name="gender" value={form.gender} onChange={handleChange}
                     options={[{ value: 'Male', label: 'Male' }, { value: 'Female', label: 'Female' }]} />
@@ -504,52 +619,83 @@ export default function EmployeeDetailPage() {
                       { value: 'Widowed',   label: 'Widowed'   },
                       { value: 'Separated', label: 'Separated' },
                     ]} />
+                  <Field label="Contact Number" name="contact_number" value={form.contact_number} onChange={handleChange} required />
+                  <div className="col-span-2">
+                    <Field label="Email Address" name="email" type="email" value={form.email} onChange={handleChange} />
+                  </div>
+                  <div className="col-span-2">
+                    <label className="block text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Complete Address</label>
+                    <textarea name="address" value={form.address || ''} onChange={handleChange} rows={2}
+                      className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" />
+                  </div>
+                  <Field label="Emergency Contact Name"   name="emergency_contact_name"   value={form.emergency_contact_name}   onChange={handleChange} />
+                  <Field label="Emergency Contact Number" name="emergency_contact_number" value={form.emergency_contact_number} onChange={handleChange} />
                 </div>
               )}
             </SectionCard>
 
-            <SectionCard title="Contact Information" icon={Phone} iconColor="text-green-500">
+            {/* Employment Details */}
+            <SectionCard title="Employment Details" icon={Briefcase} iconColor="text-indigo-500">
               {!isEditing ? (
-                <>
-                  <InfoRow label="Contact No." value={employee.contact_number} />
-                  <InfoRow label="Email"        value={employee.email} />
-                  <InfoRow label="Address"      value={employee.address} />
-                </>
+                <div className="divide-y divide-gray-50">
+                  <InfoRow label="Status"                value={<StatusBadge status={employee.employment_status} />} />
+                  <InfoRow label="Branch"                value={`${employee.branch?.branch_name || '—'}${employee.branch?.client?.name ? ` — ${employee.branch.client.name}` : ''}`} />
+                  <InfoRow label="Position"              value={employee.position} />
+                  <InfoRow label="Date Hired"            value={fmt(employee.date_hired)} />
+                  <InfoRow label="Date Resigned / Ended" value={fmt(employee.date_resigned || employee.date_ended)} />
+                  <InfoRow label="Daily Rate"            value={employee.daily_rate ? `₱${Number(employee.daily_rate).toLocaleString()}` : null} />
+                  <InfoRow label="Source"                value={employee.source} />
+                  <InfoRow label="Remarks"               value={employee.remarks} />
+                </div>
               ) : (
-                <div className="space-y-3">
-                  <Field label="Contact Number" name="contact_number" value={form.contact_number} onChange={handleChange} required />
-                  <Field label="Email Address"  name="email" type="email" value={form.email} onChange={handleChange} />
-                  <div>
-                    <label className="block text-xs font-medium text-gray-500 mb-1">Complete Address</label>
-                    <textarea name="address" value={form.address || ''} onChange={handleChange} rows={2}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="col-span-2">
+                    <label className="block text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Branch <span className="text-red-400">*</span></label>
+                    <select name="branch_id" value={form.branch_id || ''} onChange={handleChange}
+                      className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+                      <option value="">Select branch...</option>
+                      {branches.map((b) => (
+                        <option key={b.id} value={b.id}>{b.branch_name}{b.client?.name ? ` — ${b.client.name}` : ''}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="col-span-2">
+                    <Field label="Position" name="position" value={form.position} onChange={handleChange} placeholder="e.g. Service Crew, Cashier..." />
+                  </div>
+                  <Field label="Date Hired"    name="date_hired"    type="date"   value={form.date_hired}    onChange={handleChange} required />
+                  <Field label="Daily Rate"    name="daily_rate"    type="number" value={form.daily_rate}    onChange={handleChange} placeholder="0.00" />
+                  <Field label="Date Resigned" name="date_resigned" type="date"   value={form.date_resigned} onChange={handleChange} />
+                  <Field label="Date Ended"    name="date_ended"    type="date"   value={form.date_ended}    onChange={handleChange} />
+                  <div className="col-span-2">
+                    <Field label="Source" name="source" value={form.source} onChange={handleChange}
+                      options={[
+                        { value: 'WordPress', label: 'WordPress' },
+                        { value: 'Gmail',     label: 'Gmail'     },
+                        { value: 'Facebook',  label: 'Facebook'  },
+                        { value: 'BossJobs',  label: 'Boss Jobs' },
+                        { value: 'Walk-in',   label: 'Walk-in'   },
+                        { value: 'Referral',  label: 'Referral'  },
+                      ]} />
+                  </div>
+                  <div className="col-span-2">
+                    <label className="block text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Remarks</label>
+                    <textarea name="remarks" value={form.remarks || ''} onChange={handleChange} rows={3}
+                      placeholder="Add remarks..."
                       className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" />
                   </div>
                 </div>
               )}
             </SectionCard>
 
-            <SectionCard title="Emergency Contact" icon={Heart} iconColor="text-red-500">
+            {/* Government IDs */}
+            <SectionCard title="Government IDs" icon={FileText} iconColor="text-amber-500">
               {!isEditing ? (
-                <>
-                  <InfoRow label="Name"   value={employee.emergency_contact_name} />
-                  <InfoRow label="Number" value={employee.emergency_contact_number} />
-                </>
-              ) : (
-                <div className="space-y-3">
-                  <Field label="Contact Name"   name="emergency_contact_name"   value={form.emergency_contact_name}   onChange={handleChange} />
-                  <Field label="Contact Number" name="emergency_contact_number" value={form.emergency_contact_number} onChange={handleChange} />
+                <div className="divide-y divide-gray-50">
+                  <InfoRow label="SSS"        value={<span className="font-mono">{employee.sss || '—'}</span>} />
+                  <InfoRow label="Pag-IBIG"   value={<span className="font-mono">{employee.pagibig || '—'}</span>} />
+                  <InfoRow label="PhilHealth" value={<span className="font-mono">{employee.philhealth || '—'}</span>} />
+                  <InfoRow label="TIN"        value={<span className="font-mono">{employee.tin || '—'}</span>} />
                 </div>
-              )}
-            </SectionCard>
-
-            <SectionCard title="Government IDs" icon={FileText} iconColor="text-purple-500">
-              {!isEditing ? (
-                <>
-                  <InfoRow label="SSS"        value={employee.sss} />
-                  <InfoRow label="Pag-IBIG"   value={employee.pagibig} />
-                  <InfoRow label="PhilHealth" value={employee.philhealth} />
-                  <InfoRow label="TIN"        value={employee.tin} />
-                </>
               ) : (
                 <div className="space-y-3">
                   <Field label="SSS No."        name="sss"        value={form.sss}        onChange={handleChange} />
@@ -559,6 +705,27 @@ export default function EmployeeDetailPage() {
                 </div>
               )}
             </SectionCard>
+
+            {/* Documents & Requirements */}
+            <SectionCard
+              title="Documents & Requirements"
+              icon={Shield}
+              iconColor="text-green-500"
+              action={isEditing && (
+                <Field label="" name="requirements_status" value={form.requirements_status} onChange={handleChange}
+                  options={[
+                    { value: 'complete',   label: '✓ Complete'   },
+                    { value: 'incomplete', label: '✗ Incomplete' },
+                    { value: 'pending',    label: '⏳ Pending'    },
+                  ]} />
+              )}
+            >
+              {!isEditing
+                ? <DocumentsView employee={employee} />
+                : <DocumentsEdit form={form} handleChange={handleChange} />
+              }
+            </SectionCard>
+
           </div>
         )}
 
@@ -567,55 +734,34 @@ export default function EmployeeDetailPage() {
         ════════════════════════════════════════════════════════════════ */}
         {activeTab === 'employment' && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-
             <SectionCard title="Employment Details" icon={Briefcase} iconColor="text-blue-500">
               {!isEditing ? (
-                <>
+                <div className="divide-y divide-gray-50">
                   <InfoRow label="Status"              value={<StatusBadge status={employee.employment_status} />} />
                   <InfoRow label="Branch"              value={`${employee.branch?.branch_name || '—'}${employee.branch?.client?.name ? ` — ${employee.branch.client.name}` : ''}`} />
-                  <InfoRow label="Position"            value={employee.position?.name} />
+                  <InfoRow label="Position"            value={employee.position} />
                   <InfoRow label="Date Hired"          value={fmt(employee.date_hired)} />
                   <InfoRow label="Date Resigned/Ended" value={fmt(employee.date_resigned || employee.date_ended)} />
                   <InfoRow label="Daily Rate"          value={employee.daily_rate ? `₱${Number(employee.daily_rate).toLocaleString()}` : null} />
                   <InfoRow label="Source"              value={employee.source} />
-                </>
+                </div>
               ) : (
                 <div className="space-y-3">
-
-                  {/* Branch dropdown */}
                   <div>
-                    <label className="block text-xs font-medium text-gray-500 mb-1">
-                      Branch <span className="text-red-400">*</span>
-                    </label>
+                    <label className="block text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Branch <span className="text-red-400">*</span></label>
                     <select name="branch_id" value={form.branch_id || ''} onChange={handleChange}
-                      className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                      className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
                       <option value="">Select branch...</option>
                       {branches.map((b) => (
-                        <option key={b.id} value={b.id}>
-                          {b.branch_name}{b.client?.name ? ` — ${b.client.name}` : ''}
-                        </option>
+                        <option key={b.id} value={b.id}>{b.branch_name}{b.client?.name ? ` — ${b.client.name}` : ''}</option>
                       ))}
                     </select>
                   </div>
-
-                  {/* Position dropdown */}
-                  <div>
-                    <label className="block text-xs font-medium text-gray-500 mb-1">Position</label>
-                    <select name="position_id" value={form.position_id || ''} onChange={handleChange}
-                      className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
-                      <option value="">Select position...</option>
-                      {positions.map((p) => (
-                        <option key={p.id} value={p.id}>{p.name}</option>
-                      ))}
-                    </select>
-                  </div>
-
+                  <Field label="Position" name="position" value={form.position} onChange={handleChange} placeholder="e.g. Service Crew, Cashier..." />
                   <Field label="Date Hired"    name="date_hired"    type="date"   value={form.date_hired}    onChange={handleChange} required />
                   <Field label="Daily Rate"    name="daily_rate"    type="number" value={form.daily_rate}    onChange={handleChange} placeholder="0.00" />
                   <Field label="Date Resigned" name="date_resigned" type="date"   value={form.date_resigned} onChange={handleChange} />
                   <Field label="Date Ended"    name="date_ended"    type="date"   value={form.date_ended}    onChange={handleChange} />
-
-                  {/* Source */}
                   <Field label="Source" name="source" value={form.source} onChange={handleChange}
                     options={[
                       { value: 'WordPress', label: 'WordPress' },
@@ -631,7 +777,7 @@ export default function EmployeeDetailPage() {
 
             <SectionCard title="Remarks" icon={FileText} iconColor="text-gray-400">
               {!isEditing ? (
-                <p className="text-sm text-gray-600 leading-relaxed">
+                <p className="text-sm text-gray-700 leading-relaxed">
                   {employee.remarks || <span className="text-gray-300 italic">No remarks</span>}
                 </p>
               ) : (
@@ -648,8 +794,10 @@ export default function EmployeeDetailPage() {
         ════════════════════════════════════════════════════════════════ */}
         {activeTab === 'documents' && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-
-            <SectionCard title="201 File Status" icon={Shield} iconColor="text-green-500"
+            <SectionCard
+              title="201 File — Document Checklist"
+              icon={Shield}
+              iconColor="text-green-500"
               action={isEditing && (
                 <Field label="" name="requirements_status" value={form.requirements_status} onChange={handleChange}
                   options={[
@@ -657,46 +805,40 @@ export default function EmployeeDetailPage() {
                     { value: 'incomplete', label: '✗ Incomplete' },
                     { value: 'pending',    label: '⏳ Pending'    },
                   ]} />
-              )}>
+              )}
+            >
+              {!isEditing
+                ? <DocumentsView employee={employee} />
+                : <DocumentsEdit form={form} handleChange={handleChange} />
+              }
+            </SectionCard>
+
+            <SectionCard title="Government ID Numbers" icon={FileText} iconColor="text-amber-500">
               {!isEditing ? (
-                <>
-                  <div className="flex items-center gap-3 mb-4 pb-4 border-b border-gray-50">
-                    <span className="text-sm text-gray-500">Overall Status:</span>
-                    <ReqBadge status={employee.requirements_status} />
-                  </div>
-                  <DocStatus label="NBI Clearance"       status={employee.nbi_status}              expiry={employee.nbi_expiry} />
-                  <DocStatus label="Police Clearance"    status={employee.police_clearance_status} expiry={employee.police_clearance_expiry} />
-                  <DocStatus label="Medical Certificate" status={employee.medcert_status}          expiry={employee.medcert_expiry} />
-                </>
-              ) : (
-                <div className="space-y-4">
+                <div className="divide-y divide-gray-50">
                   {[
-                    { label: 'NBI Clearance',       statusKey: 'nbi_status',              expiryKey: 'nbi_expiry'              },
-                    { label: 'Police Clearance',    statusKey: 'police_clearance_status', expiryKey: 'police_clearance_expiry' },
-                    { label: 'Medical Certificate', statusKey: 'medcert_status',          expiryKey: 'medcert_expiry'          },
-                  ].map((doc) => (
-                    <div key={doc.statusKey} className="border border-gray-100 rounded-lg p-3 space-y-2">
-                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{doc.label}</p>
-                      <div className="grid grid-cols-2 gap-2">
-                        <Field label="Status" name={doc.statusKey} value={form[doc.statusKey]} onChange={handleChange}
-                          options={[
-                            { value: 'submitted',    label: '✓ Submitted'  },
-                            { value: 'pending',      label: '⏳ Pending'    },
-                            { value: 'not_required', label: 'Not Required' },
-                          ]} />
-                        <Field label="Expiry Date" name={doc.expiryKey} type="date" value={form[doc.expiryKey]} onChange={handleChange} />
+                    { label: 'SSS',        value: employee.sss        },
+                    { label: 'Pag-IBIG',   value: employee.pagibig    },
+                    { label: 'PhilHealth', value: employee.philhealth },
+                    { label: 'TIN',        value: employee.tin        },
+                  ].map(({ label, value }) => (
+                    <div key={label} className="flex items-center justify-between py-2.5 gap-4">
+                      <span className="text-sm text-gray-600 flex-1">{label}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-mono text-gray-700">{value || '—'}</span>
+                        <DocStatusBadge status={value ? 'submitted' : 'pending'} />
                       </div>
                     </div>
                   ))}
                 </div>
+              ) : (
+                <div className="space-y-3">
+                  <Field label="SSS No."        name="sss"        value={form.sss}        onChange={handleChange} />
+                  <Field label="Pag-IBIG No."   name="pagibig"    value={form.pagibig}    onChange={handleChange} />
+                  <Field label="PhilHealth No." name="philhealth" value={form.philhealth} onChange={handleChange} />
+                  <Field label="TIN"            name="tin"        value={form.tin}        onChange={handleChange} />
+                </div>
               )}
-            </SectionCard>
-
-            <SectionCard title="Submitted Government IDs" icon={FileText} iconColor="text-purple-500">
-              <DocStatus label="SSS"        status={employee.sss        ? 'submitted' : 'pending'} />
-              <DocStatus label="Pag-IBIG"   status={employee.pagibig    ? 'submitted' : 'pending'} />
-              <DocStatus label="PhilHealth" status={employee.philhealth ? 'submitted' : 'pending'} />
-              <DocStatus label="TIN"        status={employee.tin        ? 'submitted' : 'pending'} />
             </SectionCard>
           </div>
         )}
@@ -713,7 +855,7 @@ export default function EmployeeDetailPage() {
               </button>
             </div>
 
-            {!employee.hr_actions?.length ? (
+            {!hrActions.length ? (
               <div className="bg-white rounded-xl border border-gray-100 shadow-sm flex flex-col items-center justify-center py-16 text-gray-400">
                 <AlertTriangle className="h-10 w-10 mb-3 text-gray-200" />
                 <p className="text-sm font-medium">No HR actions recorded</p>
@@ -721,30 +863,96 @@ export default function EmployeeDetailPage() {
               </div>
             ) : (
               <div className="space-y-3">
-                {employee.hr_actions.map((action) => (
+                {hrActions.map((action) => (
                   <div key={action.id} className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex items-start gap-3 flex-1">
-                        <HrTypeBadge type={action.type} />
-                        <div className="flex-1 min-w-0">
-                          {action.subject     && <p className="text-sm font-semibold text-gray-800">{action.subject}</p>}
-                          {action.description && <p className="text-sm text-gray-600 mt-1 leading-relaxed">{action.description}</p>}
-                          <div className="flex items-center gap-3 mt-2 text-xs text-gray-400">
-                            <span className="flex items-center gap-1"><Calendar className="h-3 w-3" />{fmt(action.action_date)}</span>
-                            {action.type === 'loa' && action.loa_start && (
-                              <span>LOA: {fmt(action.loa_start)} – {fmt(action.loa_end)}</span>
-                            )}
-                            {action.created_by?.name && (
-                              <span className="flex items-center gap-1"><User className="h-3 w-3" /> {action.created_by.name}</span>
-                            )}
+
+                    {editingHrId === action.id ? (
+                      /* ── EDIT MODE ──────────────────────────────────────── */
+                      <div className="space-y-4">
+                        <div className="flex items-center gap-2">
+                          {[
+                            { value: 'memo', label: 'Memo',            cls: 'bg-blue-100 text-blue-700'     },
+                            { value: 'ir',   label: 'Incident Report', cls: 'bg-red-100 text-red-700'       },
+                            { value: 'loa',  label: 'LOA',             cls: 'bg-purple-100 text-purple-700' },
+                          ].map((t) => (
+                            <button key={t.value}
+                              onClick={() => setEditHrForm((f) => ({ ...f, type: t.value }))}
+                              className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all
+                                ${editHrForm.type === t.value
+                                  ? t.cls + ' ring-2 ring-offset-1 ring-current'
+                                  : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>
+                              {t.label}
+                            </button>
+                          ))}
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="col-span-2">
+                            <Field label="Subject" name="subject" value={editHrForm.subject}
+                              onChange={(e) => setEditHrForm((f) => ({ ...f, subject: e.target.value }))} />
                           </div>
+                          <div className="col-span-2">
+                            <label className="block text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Description</label>
+                            <textarea value={editHrForm.description}
+                              onChange={(e) => setEditHrForm((f) => ({ ...f, description: e.target.value }))}
+                              rows={3} placeholder="Details of the action..."
+                              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" />
+                          </div>
+                          <Field label="Action Date" name="action_date" type="date" value={editHrForm.action_date}
+                            onChange={(e) => setEditHrForm((f) => ({ ...f, action_date: e.target.value }))} required />
+                          {editHrForm.type === 'loa' && (
+                            <>
+                              <Field label="LOA Start" name="loa_start" type="date" value={editHrForm.loa_start}
+                                onChange={(e) => setEditHrForm((f) => ({ ...f, loa_start: e.target.value }))} />
+                              <Field label="LOA End" name="loa_end" type="date" value={editHrForm.loa_end}
+                                onChange={(e) => setEditHrForm((f) => ({ ...f, loa_end: e.target.value }))} />
+                            </>
+                          )}
+                        </div>
+                        <div className="flex items-center justify-end gap-2 pt-1 border-t border-gray-50">
+                          <button onClick={() => setEditingHrId(null)}
+                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">
+                            <X className="h-3.5 w-3.5" /> Cancel
+                          </button>
+                          <button onClick={() => handleUpdateHrAction(action.id)}
+                            disabled={savingEditHr || !editHrForm.action_date}
+                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors">
+                            {savingEditHr ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                            {savingEditHr ? 'Saving...' : 'Save Changes'}
+                          </button>
                         </div>
                       </div>
-                      <button onClick={() => handleDeleteHrAction(action.id)}
-                        className="p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors flex-shrink-0">
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </div>
+                    ) : (
+                      /* ── VIEW MODE ──────────────────────────────────────── */
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex items-start gap-3 flex-1">
+                          <HrTypeBadge type={action.type} />
+                          <div className="flex-1 min-w-0">
+                            {action.subject     && <p className="text-sm font-semibold text-gray-800">{action.subject}</p>}
+                            {action.description && <p className="text-sm text-gray-600 mt-1 leading-relaxed">{action.description}</p>}
+                            <div className="flex items-center gap-3 mt-2 text-xs text-gray-400">
+                              <span className="flex items-center gap-1"><Calendar className="h-3 w-3" />{fmt(action.action_date)}</span>
+                              {action.type === 'loa' && action.loa_start && (
+                                <span>LOA: {fmt(action.loa_start)} – {fmt(action.loa_end)}</span>
+                              )}
+                              {action.created_by?.name && (
+                                <span className="flex items-center gap-1"><User className="h-3 w-3" /> {action.created_by.name}</span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1 flex-shrink-0">
+                          <button onClick={() => handleEditHrAction(action)}
+                            className="p-1.5 text-gray-300 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-colors" title="Edit">
+                            <Edit2 className="h-4 w-4" />
+                          </button>
+                          <button onClick={() => handleDeleteHrAction(action.id)}
+                            className="p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors" title="Delete">
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
                   </div>
                 ))}
               </div>
@@ -770,15 +978,14 @@ export default function EmployeeDetailPage() {
                 <div className="space-y-4">
                   {customCols.map((col) => (
                     <div key={col.field_key}>
-                      <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">
-                        {col.label}
-                        <span className="ml-1 text-gray-300 normal-case">({col.type})</span>
+                      <label className="block text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">
+                        {col.label} <span className="text-gray-300 normal-case">({col.type})</span>
                       </label>
                       <input
                         type={col.type === 'number' ? 'number' : col.type === 'date' ? 'date' : 'text'}
                         value={customForm[col.field_key] || ''}
                         onChange={(e) => setCustomForm((prev) => ({ ...prev, [col.field_key]: e.target.value }))}
-                        className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                        className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
                         placeholder={`Enter ${col.label.toLowerCase()}...`}
                       />
                     </div>
@@ -789,9 +996,7 @@ export default function EmployeeDetailPage() {
                       {savingCustom ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                       {savingCustom ? 'Saving...' : 'Save Custom Fields'}
                     </button>
-                    {customSaved && (
-                      <span className="text-xs text-green-600 font-medium">✓ Saved successfully</span>
-                    )}
+                    {customSaved && <span className="text-xs text-green-600 font-medium">✓ Saved successfully</span>}
                   </div>
                 </div>
               )}
@@ -799,9 +1004,11 @@ export default function EmployeeDetailPage() {
 
             {customCols.length > 0 && employee.custom_fields && Object.keys(employee.custom_fields).length > 0 && (
               <SectionCard title="Saved Values" icon={FileText} iconColor="text-gray-400">
-                {customCols.map((col) => (
-                  <InfoRow key={col.field_key} label={col.label} value={employee.custom_fields?.[col.field_key] || '—'} />
-                ))}
+                <div className="divide-y divide-gray-50">
+                  {customCols.map((col) => (
+                    <InfoRow key={col.field_key} label={col.label} value={employee.custom_fields?.[col.field_key] || '—'} />
+                  ))}
+                </div>
               </SectionCard>
             )}
           </div>
@@ -820,7 +1027,6 @@ export default function EmployeeDetailPage() {
                 <X className="h-5 w-5" />
               </button>
             </div>
-
             <div className="flex items-center gap-2">
               {[
                 { value: 'memo', label: 'Memo',            cls: 'bg-blue-100 text-blue-700'     },
@@ -834,12 +1040,11 @@ export default function EmployeeDetailPage() {
                 </button>
               ))}
             </div>
-
             <div className="space-y-3">
               <Field label="Subject" name="subject" value={hrForm.subject}
                 onChange={(e) => setHrForm((f) => ({ ...f, subject: e.target.value }))} />
               <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">Description</label>
+                <label className="block text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Description</label>
                 <textarea value={hrForm.description}
                   onChange={(e) => setHrForm((f) => ({ ...f, description: e.target.value }))}
                   rows={3} placeholder="Details of the action..."
@@ -856,7 +1061,6 @@ export default function EmployeeDetailPage() {
                 </div>
               )}
             </div>
-
             <div className="flex justify-end gap-2 pt-2">
               <button onClick={() => setShowHrModal(false)}
                 className="px-4 py-2 text-sm font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">

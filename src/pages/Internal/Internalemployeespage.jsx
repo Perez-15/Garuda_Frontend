@@ -746,7 +746,7 @@ export default function InternalEmployeesPage() {
                           </td>
                         ))}
                         <td className="px-4 py-3.5 text-right">
-                          <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <div className="flex items-center justify-end gap-1">
                             {/* ── View Profile ── */}
                             <Link to={`/internal/users/${u.id}`}
                               className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors">
@@ -790,10 +790,6 @@ export default function InternalEmployeesPage() {
             </>
           )}
         </div>
-
-        {customCols.length > 0 && (
-          <p className="text-xs text-gray-400">✦ Custom columns — data entered per employee</p>
-        )}
       </div>
 
       {showAddModal && (

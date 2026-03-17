@@ -47,10 +47,17 @@ export default function DashboardLayout({ children }) {
     isStartsWith('/employees');
   const attendanceOpen = isStartsWith('/attendance');
 
+ const settingsOpen =
+  isStartsWith('/clients') ||
+  isStartsWith('/branches') ||
+  isStartsWith('/manage-columns') ||
+  isStartsWith('/workflows'); 
+
   // ── Lifted group toggle state (keyed by group name) ────────────────────────
   const [openGroups, setOpenGroups] = useState({
     External:   applicantsOpen,
     Attendance: attendanceOpen,
+    Settings:   settingsOpen,
   });
 
   const toggleGroup = (name) =>
@@ -96,7 +103,23 @@ export default function DashboardLayout({ children }) {
         ),
       ],
     },
-    {
+
+    ...(!isTA
+      ? [
+          { name: 'Reports', href: '/reports',   icon: FileText },
+        ]
+      : []),
+
+    ...(userRole === 'super_admin' || userRole === 'hr_admin'
+      ? [{ name: 'Users', href: '/users', icon: UsersIcon }]
+      : []),
+
+ {
+      name: 'Settings',
+      icon: Settings2,
+      group: true,
+      children: [
+   {
       name: 'Clients',
       href: '/clients',
       icon: Building2,
@@ -106,20 +129,19 @@ export default function DashboardLayout({ children }) {
       href: '/branches',
       icon: MapPin,
     },
-    ...(!isTA
+
+       ...(!isTA
       ? [
           { name: 'Process', href: '/workflows', icon: Workflow },
-          { name: 'Reports', href: '/reports',   icon: FileText },
-        ]
+    ]
       : []),
-    ...(userRole === 'super_admin' || userRole === 'hr_admin'
-      ? [{ name: 'Users', href: '/users', icon: UsersIcon }]
-      : []),
-
-      ...(userRole === 'super_admin' || userRole === 'hr_admin'
+           ...(userRole === 'super_admin' || userRole === 'hr_admin'
   ? [{ name: 'Manage Columns', href: '/manage-columns', icon: Settings2 }]
   : []),
+           ],
+          },
   ];
+
 
   // ── Logo ───────────────────────────────────────────────────────────────────
   const LogoBrand = () => (
@@ -136,8 +158,11 @@ export default function DashboardLayout({ children }) {
   // NOTE: No useState inside here — all state lives in DashboardLayout above.
   const NavItem = ({ item, onLinkClick }) => {
     if (item.group) {
-      const isGroupActive =
-        item.name === 'Attendance' ? attendanceOpen : applicantsOpen;
+   const isGroupActive =
+  item.name === 'External'   ? applicantsOpen :
+  item.name === 'Attendance' ? attendanceOpen :
+  item.name === 'Settings'   ? settingsOpen :
+  false;
 
       // Use lifted state; also force-open when on a child route
       const isOpen = openGroups[item.name] || isGroupActive;
