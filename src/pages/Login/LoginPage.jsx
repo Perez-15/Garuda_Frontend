@@ -1,10 +1,13 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
+import { Eye, EyeOff } from 'lucide-react';
+import bgImage from '../../assets/Building.png';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -28,60 +31,98 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
-      <div className="max-w-md w-full bg-white rounded-lg shadow-xl p-8">
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Garuda HR System</h1>
-          <p className="text-gray-600 mt-2">Sign in to your account</p>
+    <div className="min-h-screen flex">
+
+      {/* LEFT SIDE - IMAGE */}
+      <div
+        className="hidden md:flex w-1/2 bg-cover bg-center"
+        style={{
+          backgroundImage: `url(${bgImage})`
+        }}
+      >
+        {/* DARK OVERLAY */}
+        <div className="w-full h-full bg-black/40 flex items-center justify-center p-10">
+          <div className="text-white text-center">
+            <h1 className="text-4xl font-bold mb-4">
+              Garuda Recruitment Agency
+            </h1>
+            <p className="text-lg opacity-90">
+              Manage applicants and streamline hiring with ease.
+            </p>
+          </div>
         </div>
+      </div>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {error && (
-            <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded">
-              {error}
+      {/* RIGHT SIDE - FORM */}
+      <div className="w-full md:w-1/2 flex items-center justify-center bg-white p-6">
+
+        <div className="w-full max-w-md bg-white shadow-xl rounded-2xl p-8">
+
+          <div className="text-center mb-6">
+            <h2 className="text-2xl font-bold text-gray-900">
+              Welcome Back
+            </h2>
+            <p className="text-gray-500 text-sm mt-1">
+              Login to continue
+            </p>
+          </div>
+
+          <form onSubmit={handleSubmit} className="space-y-5">
+
+            {error && (
+              <div className="bg-red-100 text-red-600 px-4 py-2 rounded-lg text-sm">
+                {error}
+              </div>
+            )}
+
+            {/* EMAIL */}
+            <div>
+              <label className="text-sm text-gray-600">Email</label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="mt-1 w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-orange-500 outline-none"
+                placeholder="admin@garuda.com"
+                required
+              />
             </div>
-          )}
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Email Address
-            </label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="admin@garuda.com"
-              required
-            />
+            {/* PASSWORD */}
+            <div className="relative">
+              <label className="text-sm text-gray-600">Password</label>
+              <input
+                type={showPassword ? 'text' : 'password'}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="mt-1 w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-orange-500 outline-none pr-10"
+                placeholder="••••••••"
+                required
+              />
+
+              <div
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-9 cursor-pointer text-gray-500"
+              >
+                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </div>
+            </div>
+
+            {/* BUTTON */}
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full bg-orange-600 hover:bg-orange-700 text-white py-2 rounded-lg font-medium transition disabled:opacity-50"
+            >
+              {loading ? 'Signing in...' : 'Sign In'}
+            </button>
+          </form>
+
+          <div className="mt-6 text-center text-xs text-gray-500">
+            <p>Default:</p>
+            <p className="font-mono">admin@garuda.com / password</p>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Password
-            </label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="••••••••"
-              required
-            />
-          </div>
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 focus:ring-4 focus:ring-blue-300 disabled:opacity-50 disabled:cursor-not-allowed transition"
-          >
-            {loading ? 'Signing in...' : 'Sign In'}
-          </button>
-        </form>
-
-        <div className="mt-6 text-center text-sm text-gray-600">
-          <p>Default credentials:</p>
-          <p className="font-mono text-xs mt-1">admin@garuda.com / password</p>
         </div>
       </div>
     </div>

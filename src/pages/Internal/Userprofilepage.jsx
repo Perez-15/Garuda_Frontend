@@ -1,10 +1,11 @@
+// pages/Internal/UserProfilePage.jsx
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, Camera, Save, X, Loader2, Edit2,
   CalendarDays, Building2, CreditCard, FileText,
   User as UserIcon, Briefcase, CheckCircle, Clock,
-  XCircle, AlertCircle, Trash2, ZoomIn,
+  XCircle, AlertCircle, Trash2, ZoomIn, Lock,
 } from 'lucide-react';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import { userService } from '../../services/userService';
@@ -13,6 +14,13 @@ import { useAuth } from '../../contexts/AuthContext';
 
 const PAGE = 'internal_employees';
 
+// ── Fields the profile owner (non-admin) can edit themselves ─────────────────
+const SELF_EDITABLE_FIELDS = new Set([
+  'full_name', 'contact_number', 'address', 'date_of_birth',
+  'age', 'gender', 'civil_status',
+  'emergency_contact_name', 'emergency_contact_number',
+]);
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const fmt = (d) =>
   d ? new Date(d).toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' }) : '—';
@@ -20,13 +28,6 @@ const fmt = (d) =>
 const fmtShort = (d) =>
   d ? new Date(d).toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' }) : '—';
 
-// Map field_key → which nested object holds the value on the profile
-const FIELD_SOURCE = {
-  // role comes from roles array
-  role: (profile) => profile.roles?.[0]?.name || '—',
-};
-
-// Fields that need special read handling from profile
 const FIXED_READ = {
   full_name:                (p) => p.name,
   email:                    (p) => p.email,
@@ -65,7 +66,6 @@ const FIXED_READ = {
   picture_1x1:              (p) => p.custom_fields?.picture_1x1,
 };
 
-// Fields that write to flat form vs custom_fields
 const FIXED_KEYS = new Set([
   'full_name','email','contact_number','address','date_of_birth','age','gender',
   'civil_status','emergency_contact_name','emergency_contact_number',
@@ -74,11 +74,9 @@ const FIXED_KEYS = new Set([
   'nbi_status','medcert_status','police_clearance_status','contract_status','requirements_status',
 ]);
 
-// Map field_key to actual user model key for saving
 const SAVE_KEY_MAP = { full_name: 'name' };
 const toSaveKey = (k) => SAVE_KEY_MAP[k] || k;
 
-// Section icon map
 const SECTION_ICONS = {
   'Personal Information':     <UserIcon className="h-4 w-4" />,
   'Employment Details':       <Briefcase className="h-4 w-4" />,
@@ -144,7 +142,6 @@ function FieldValue({ fieldKey, type, profile }) {
     ? reader(profile)
     : profile.custom_fields?.[fieldKey];
 
-  // Special renderers
   if (['nbi_status','medcert_status','police_clearance_status','contract_status',
        'psa_birth_cert','sss_doc','philhealth_doc','pagibig_doc','tin_doc',
        'coe','tor_diploma','valid_id_photocopy','picture_1x1'].includes(fieldKey)) {
@@ -165,7 +162,6 @@ function FieldValue({ fieldKey, type, profile }) {
 function FieldEditor({ field, value, onChange }) {
   const { field_key, label, type, options } = field;
 
-  // options may come from the API as a JSON string — parse it if needed
   const parsedOptions = Array.isArray(options)
     ? options
     : (typeof options === 'string'
@@ -178,10 +174,10 @@ function FieldEditor({ field, value, onChange }) {
     return (
       <div className="flex flex-col gap-1">
         <label className="text-xs font-medium text-gray-400 uppercase tracking-wide">{label}</label>
-<select value={value || ''} onChange={(e) => onChange(field_key, e.target.value)} className={`${inputCls} bg-white`}>
-  <option value="" disabled>---</option>  {/* ← add disabled */}
-  {parsedOptions.map((o) => <option key={o} value={o}>{o}</option>)}
-</select>
+        <select value={value || ''} onChange={(e) => onChange(field_key, e.target.value)} className={`${inputCls} bg-white`}>
+          <option value="" disabled>---</option>
+          {parsedOptions.map((o) => <option key={o} value={o}>{o}</option>)}
+        </select>
       </div>
     );
   }
@@ -228,26 +224,29 @@ function FieldEditor({ field, value, onChange }) {
   );
 }
 
-// ── Section card ──────────────────────────────────────────────────────────────
-function SectionCard({ title, fields, profile, editing, onEdit, onSave, onCancel, onFieldChange, formValues, saving, canEdit }) {
-  const icon  = SECTION_ICONS[title]  || <FileText className="h-4 w-4" />;
-  const color = SECTION_COLORS[title] || 'text-gray-500';
-
-  // Assigned branches — special render
-  const renderBranches = () => (
-    <div className="col-span-2">
-      <span className="text-xs font-medium text-gray-400 uppercase tracking-wide">Assigned Branches</span>
-      <div className="flex flex-wrap gap-1.5 mt-1">
-        {profile.branches?.length > 0
-          ? profile.branches.map((b) => (
-              <span key={b.id} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs bg-purple-50 text-purple-700 border border-purple-100">
-                <Building2 className="h-3 w-3" /> {b.branch_name}
-              </span>
-            ))
-          : <span className="text-sm text-gray-400">—</span>}
+// ── Locked field — shown when owner tries to view an HR-only field in edit mode ─
+function LockedField({ field, profile }) {
+  return (
+    <div className="flex flex-col gap-1">
+      <label className="text-xs font-medium text-gray-400 uppercase tracking-wide flex items-center gap-1">
+        {field.label}
+        <Lock className="h-3 w-3 text-gray-300" />
+      </label>
+      <div className="w-full text-sm border border-gray-100 rounded-lg px-3 py-2 bg-gray-50 text-gray-400 cursor-not-allowed flex items-center justify-between">
+        <FieldValue fieldKey={field.field_key} type={field.type} profile={profile} />
+        <span className="text-xs text-gray-300 ml-2 whitespace-nowrap">HR only</span>
       </div>
     </div>
   );
+}
+
+// ── Section card ──────────────────────────────────────────────────────────────
+function SectionCard({
+  title, fields, profile, editing, onEdit, onSave, onCancel,
+  onFieldChange, formValues, saving, canEditSection, canEditField,
+}) {
+  const icon  = SECTION_ICONS[title]  || <FileText className="h-4 w-4" />;
+  const color = SECTION_COLORS[title] || 'text-gray-500';
 
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
@@ -256,7 +255,7 @@ function SectionCard({ title, fields, profile, editing, onEdit, onSave, onCancel
           <div className={`p-1.5 rounded-lg bg-gray-50 ${color}`}>{icon}</div>
           <h3 className="text-sm font-semibold text-gray-800">{title}</h3>
         </div>
-        {canEdit && (
+        {canEditSection && (
           editing ? (
             <div className="flex items-center gap-1.5">
               <button onClick={onCancel}
@@ -282,16 +281,34 @@ function SectionCard({ title, fields, profile, editing, onEdit, onSave, onCancel
         {editing ? (
           <div className="grid grid-cols-2 gap-4">
             {fields.map((f) => {
-              if (f.field_key === 'role') return null; // role not editable inline
+              if (f.field_key === 'role') return null;
               const span = ['full_name','email','address','emergency_contact_name',
                             'emergency_contact_number'].includes(f.field_key) ? 'col-span-2' : '';
               return (
                 <div key={f.field_key} className={span || 'col-span-1'}>
-                  <FieldEditor field={f} value={formValues[f.field_key] ?? ''} onChange={onFieldChange} />
+                  {/* If the user can edit this specific field, show editor; otherwise show locked */}
+                  {canEditField(f.field_key) ? (
+                    <FieldEditor field={f} value={formValues[f.field_key] ?? ''} onChange={onFieldChange} />
+                  ) : (
+                    <LockedField field={f} profile={profile} />
+                  )}
                 </div>
               );
             })}
-            {title === 'Employment Details' && renderBranches()}
+            {title === 'Employment Details' && (
+              <div className="col-span-2">
+                <span className="text-xs font-medium text-gray-400 uppercase tracking-wide">Assigned Branches</span>
+                <div className="flex flex-wrap gap-1.5 mt-1">
+                  {profile.branches?.length > 0
+                    ? profile.branches.map((b) => (
+                        <span key={b.id} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs bg-purple-50 text-purple-700 border border-purple-100">
+                          <Building2 className="h-3 w-3" /> {b.branch_name}
+                        </span>
+                      ))
+                    : <span className="text-sm text-gray-400">—</span>}
+                </div>
+              </div>
+            )}
           </div>
         ) : (
           <div className="divide-y divide-gray-50">
@@ -306,7 +323,13 @@ function SectionCard({ title, fields, profile, editing, onEdit, onSave, onCancel
               }
               return (
                 <div key={f.field_key} className="flex items-center justify-between py-2.5 gap-4">
-                  <span className="text-sm text-gray-400 w-44 flex-shrink-0">{f.label}</span>
+                  <span className="text-sm text-gray-400 w-44 flex-shrink-0 flex items-center gap-1">
+                    {f.label}
+                    {/* Show lock icon on HR-only fields when viewed by owner */}
+                    {!canEditField(f.field_key) && canEditSection && (
+                      <Lock className="h-3 w-3 text-gray-300 flex-shrink-0" />
+                    )}
+                  </span>
                   <div className="flex-1 flex justify-end">
                     <FieldValue fieldKey={f.field_key} type={f.type} profile={profile} />
                   </div>
@@ -342,31 +365,41 @@ export default function UserProfilePage() {
   const navigate     = useNavigate();
   const { user: currentUser } = useAuth();
 
-  const [profile,       setProfile]       = useState(null);
-  const [schema,        setSchema]        = useState([]);   // grouped sections
-  const [loading,       setLoading]       = useState(true);
-  const [toast,         setToast]         = useState(null);
-  const [lightbox,      setLightbox]      = useState(false);
-  const [uploadingPhoto,setUploadingPhoto] = useState(false);
+  const [profile,        setProfile]        = useState(null);
+  const [schema,         setSchema]         = useState([]);
+  const [loading,        setLoading]        = useState(true);
+  const [toast,          setToast]          = useState(null);
+  const [lightbox,       setLightbox]       = useState(false);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const photoInputRef = useRef(null);
 
-  // Per-section edit state: { [sectionName]: boolean }
   const [editingSections, setEditingSections] = useState({});
   const [savingSections,  setSavingSections]  = useState({});
-  // Per-section form values: { [sectionName]: { field_key: value } }
-  const [sectionForms, setSectionForms] = useState({});
+  const [sectionForms,    setSectionForms]    = useState({});
 
   const userRole  = currentUser?.roles?.[0]?.name;
   const canManage = userRole === 'super_admin' || userRole === 'hr_admin';
   const isSelf    = currentUser?.id === Number(id);
-  const canEdit   = canManage || isSelf;
+
+  // ── Permission helpers ────────────────────────────────────────────────────
+
+  // Can this specific field be edited by the current user?
+  const canEditField = useCallback((fieldKey) => {
+    if (canManage) return true;                          // HR/admin edits everything
+    if (isSelf) return SELF_EDITABLE_FIELDS.has(fieldKey); // owner edits personal info only
+    return false;
+  }, [canManage, isSelf]);
+
+  // A section shows the Edit button only if at least one field in it is editable
+  const canEditSection = useCallback((fields) => {
+    return fields.some((f) => canEditField(f.field_key));
+  }, [canEditField]);
 
   const showToast = useCallback((type, message) => {
     setToast({ type, message });
     setTimeout(() => setToast(null), 4000);
   }, []);
 
-  // ── Group flat columns into sections ───────────────────────────────────────
   const groupSchema = useCallback((columns) => {
     const map = {};
     const order = [];
@@ -378,14 +411,10 @@ export default function UserProfilePage() {
     return order.map((sec) => ({ name: sec, fields: map[sec] }));
   }, []);
 
-  // ── Build form values from profile for a section ───────────────────────────
   const buildFormForSection = useCallback((sectionFields, profile) => {
     const form = {};
     sectionFields.forEach((f) => {
       if (FIXED_KEYS.has(f.field_key)) {
-        // Map display key back to raw profile key
-        const rawKey = SAVE_KEY_MAP[f.field_key] ? f.field_key : f.field_key;
-        // Special cases
         if (f.field_key === 'full_name')      form[f.field_key] = profile.name || '';
         else if (f.field_key === 'date_of_birth') form[f.field_key] = profile.date_of_birth?.substring(0,10) || '';
         else if (f.field_key === 'date_hired')    form[f.field_key] = profile.date_hired?.substring(0,10) || '';
@@ -399,7 +428,6 @@ export default function UserProfilePage() {
     return form;
   }, []);
 
-  // ── Load profile + schema ──────────────────────────────────────────────────
   const loadData = useCallback(async () => {
     try {
       setLoading(true);
@@ -407,11 +435,10 @@ export default function UserProfilePage() {
         userService.getById(id),
         customColumnService.getByPage(PAGE),
       ]);
-      const p = profileRes.user;
+      const p       = profileRes.user;
       const grouped = groupSchema(Array.isArray(schemaRes) ? schemaRes : []);
       setProfile(p);
       setSchema(grouped);
-      // Init form values per section
       const forms = {};
       grouped.forEach((sec) => { forms[sec.name] = buildFormForSection(sec.fields, p); });
       setSectionForms(forms);
@@ -430,7 +457,6 @@ export default function UserProfilePage() {
     return () => window.removeEventListener('keydown', handleKey);
   }, [lightbox]);
 
-  // ── Field change handler ───────────────────────────────────────────────────
   const handleFieldChange = (sectionName, fieldKey, value) => {
     setSectionForms((prev) => ({
       ...prev,
@@ -438,17 +464,18 @@ export default function UserProfilePage() {
     }));
   };
 
-  // ── Save a section ─────────────────────────────────────────────────────────
   const saveSection = async (sectionName, fields) => {
     try {
       setSavingSections((s) => ({ ...s, [sectionName]: true }));
       const form = sectionForms[sectionName] || {};
 
-      const fixedPayload    = {};
-      const customPayload   = {};
+      const fixedPayload  = {};
+      const customPayload = {};
 
       fields.forEach((f) => {
-        if (f.field_key === 'role') return; // handled separately
+        if (f.field_key === 'role') return;
+        // Only save fields this user is allowed to edit
+        if (!canEditField(f.field_key)) return;
         const val = form[f.field_key];
         if (FIXED_KEYS.has(f.field_key)) {
           fixedPayload[toSaveKey(f.field_key)] = val;
@@ -457,19 +484,16 @@ export default function UserProfilePage() {
         }
       });
 
-    // Save fixed fields
-if (Object.keys(fixedPayload).length) {
-  await userService.update(id, fixedPayload);
-}
-
-// Save custom fields
-if (Object.keys(customPayload).length) {
-  try {
-    await userService.updateCustomFields(id, customPayload);
-  } catch (err) {
-    console.warn("Custom fields update skipped:", err);
-  }
-}
+      if (Object.keys(fixedPayload).length) {
+        await userService.update(id, fixedPayload);
+      }
+      if (Object.keys(customPayload).length) {
+        try {
+          await userService.updateCustomFields(id, customPayload);
+        } catch (err) {
+          console.warn('Custom fields update skipped:', err);
+        }
+      }
 
       showToast('success', `${sectionName} updated.`);
       setEditingSections((s) => ({ ...s, [sectionName]: false }));
@@ -481,7 +505,6 @@ if (Object.keys(customPayload).length) {
     }
   };
 
-  // ── Photo handlers ────────────────────────────────────────────────────────
   const handlePhotoChange = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -501,7 +524,6 @@ if (Object.keys(customPayload).length) {
     catch { showToast('error', 'Failed to remove photo.'); }
   };
 
-  // ── Loading / not found ───────────────────────────────────────────────────
   if (loading) {
     return (
       <DashboardLayout>
@@ -562,6 +584,14 @@ if (Object.keys(customPayload).length) {
           <ArrowLeft className="h-4 w-4" /> Back to Internal Employees
         </button>
 
+        {/* ── Permission notice for non-admin owners ───────────────────────── */}
+        {isSelf && !canManage && (
+          <div className="flex items-center gap-2.5 px-4 py-3 bg-blue-50 border border-blue-100 rounded-xl text-xs text-blue-700">
+            <Lock className="h-4 w-4 flex-shrink-0" />
+            You can edit your personal information. Fields marked with a lock icon can only be edited by HR or Admin.
+          </div>
+        )}
+
         {/* ── Hero Card ────────────────────────────────────────────────────── */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
           <div className="h-24 bg-gradient-to-r from-orange-400 via-orange-500 to-red-500 flex items-center justify-center">
@@ -596,7 +626,8 @@ if (Object.keys(customPayload).length) {
                     </div>
                   )}
                 </div>
-                {canEdit && (
+                {/* Anyone can update their own photo; admins can update anyone's */}
+                {(canManage || isSelf) && (
                   <>
                     <button onClick={() => photoInputRef.current?.click()}
                       className="absolute -bottom-1 -right-1 h-8 w-8 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white flex items-center justify-center shadow-md transition-colors z-10">
@@ -608,7 +639,7 @@ if (Object.keys(customPayload).length) {
                 )}
               </div>
               <div className="flex items-center gap-2 mt-14">
-                {canEdit && profile.profile_photo_url && (
+                {(canManage || isSelf) && profile.profile_photo_url && (
                   <button onClick={handleDeletePhoto}
                     className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-red-500 border border-red-200 rounded-lg hover:bg-red-50 transition-colors">
                     <Trash2 className="h-3.5 w-3.5" /> Remove photo
@@ -643,8 +674,10 @@ if (Object.keys(customPayload).length) {
         {schema.length === 0 ? (
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-8 text-center text-gray-400 text-sm">
             No schema configured for this page yet.{' '}
-            <button onClick={() => navigate('/manage-columns/internal_employees')}
-              className="text-indigo-500 hover:underline">Configure schema</button>
+            {canManage && (
+              <button onClick={() => navigate('/manage-columns/internal_employees')}
+                className="text-indigo-500 hover:underline">Configure schema</button>
+            )}
           </div>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -656,7 +689,8 @@ if (Object.keys(customPayload).length) {
                 profile={profile}
                 editing={!!editingSections[sec.name]}
                 saving={!!savingSections[sec.name]}
-                canEdit={canEdit}
+                canEditSection={canEditSection(sec.fields)}
+                canEditField={canEditField}
                 formValues={sectionForms[sec.name] || {}}
                 onEdit={() => setEditingSections((s) => ({ ...s, [sec.name]: true }))}
                 onCancel={() => {

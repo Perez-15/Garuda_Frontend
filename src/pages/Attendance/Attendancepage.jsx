@@ -9,6 +9,14 @@ import {
 import { useGeolocation } from '../../hooks/Usegeolocation';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+function getAutoCutoffHalf(dateStr) {
+  const d = new Date(dateStr);
+  const day = d.getDate();  
+
+  if (day <= 15) return 1;
+  return 2;
+}
 
 function formatTime(value) {
   if (!value) return '—';
@@ -43,10 +51,29 @@ function toDateString(date) {
   return date.toISOString().split('T')[0];
 }
 
+/**
+ * Returns the last day of a given month (handles 28/29/30/31).
+ * @param {string} monthStr — "YYYY-MM"
+ */
+function getLastDayOfMonth(monthStr) {
+  const [year, month] = monthStr.split('-').map(Number);
+  return new Date(year, month, 0).getDate();
+}
+
+/**
+ * Returns { from, to } date strings for a cutoff period.
+ * half: 1 → 1st–15th, 2 → 16th–last day, 'full' → 1st–last day
+ */
+function getCutoffRange(monthStr, half) {
+  const last = getLastDayOfMonth(monthStr);
+  const lastStr = String(last).padStart(2, '0');
+  if (half === 1)      return { from: `${monthStr}-01`, to: `${monthStr}-15`         };
+  if (half === 2)      return { from: `${monthStr}-16`, to: `${monthStr}-${lastStr}` };
+  if (half === 'full') return { from: `${monthStr}-01`, to: `${monthStr}-${lastStr}` };
+}
+
 // ── Attendance policy ─────────────────────────────────────────────────────────
-// Work hours: 08:00 – 17:00
-// Late threshold: time_in after 08:15 (i.e. 08:16+ is Late)
-const LATE_CUTOFF_MINS = 8 * 60 + 16; // 496 minutes from midnight
+const LATE_CUTOFF_MINS = 8 * 60 + 16;
 
 function toMins(timeStr) {
   if (!timeStr) return null;
@@ -54,9 +81,6 @@ function toMins(timeStr) {
   return h * 60 + m;
 }
 
-/**
- * Returns "Xh Ym" from time_in → time_out, or "—" when incomplete.
- */
 function calcHoursWorked(timeIn, timeOut) {
   const inMins  = toMins(timeIn);
   const outMins = toMins(timeOut);
@@ -68,9 +92,6 @@ function calcHoursWorked(timeIn, timeOut) {
   return h > 0 ? `${h}h ${m}m` : `${m}m`;
 }
 
-/**
- * Returns "+Xm" (minutes past 08:16) when Late, otherwise "—".
- */
 function calcLateBy(timeIn, status) {
   if (status !== 'Late') return '—';
   const inMins = toMins(timeIn);
@@ -79,6 +100,7 @@ function calcLateBy(timeIn, status) {
   return late > 0 ? `+${late}m` : '—';
 }
 
+// ─── Components ───────────────────────────────────────────────────────────────
 function StatusBadge({ status }) {
   const map = {
     Present: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
@@ -118,21 +140,56 @@ function FilterTab({ label, active, onClick }) {
   );
 }
 
+function CutoffPill({ label, active, onClick }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`px-4 py-1.5 rounded-lg text-sm font-semibold border transition-all
+        ${active
+          ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+          : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'}`}
+    >
+      {label}
+    </button>
+  );
+}
+
+// ─── Main Page ────────────────────────────────────────────────────────────────
 export default function AttendancePage() {
-  const [pageLoading, setPageLoading] = useState(true);
-  const [todayRecord,   setTodayRecord]   = useState(null);
-  const [history,       setHistory]       = useState([]);
+  const [pageLoading,    setPageLoading]    = useState(true);
+  const [todayRecord,    setTodayRecord]    = useState(null);
+  const [history,        setHistory]        = useState([]);
   const [loadingHistory, setLoadingHistory] = useState(true);
-  const [submitting,    setSubmitting]    = useState(false);
-  const [toast,         setToast]         = useState(null);
-  const [filterMode,    setFilterMode]    = useState('month');
-  const [filterStatus,  setFilterStatus]  = useState('');
-  const [selectedDay,   setSelectedDay]   = useState(toDateString(new Date()));
-  const [weekOffset,    setWeekOffset]    = useState(0);
+  const [submitting,     setSubmitting]     = useState(false);
+  const [toast,          setToast]          = useState(null);
+
+  // Filter state
+  const [filterMode,   setFilterMode]   = useState('day');
+  const [filterStatus, setFilterStatus] = useState('');
+  const [selectedDay,  setSelectedDay]  = useState(toDateString(new Date()));
+  const [weekOffset,   setWeekOffset]   = useState(0);
   const [month, setMonth] = useState(() => {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   });
+
+  // Cutoff half: 1 = 1st–15th, 2 = 16th–end, 'full' = full month
+ const [cutoffHalf, setCutoffHalf] = useState(1);
+
+// ✅ ADD HERE
+useEffect(() => {
+  const today = new Date();
+  const selectedMonth = month;
+
+  const currentMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+
+    if (selectedMonth === currentMonth) {
+      const autoHalf = getAutoCutoffHalf(today.toISOString());
+    setCutoffHalf(autoHalf);
+  } else {
+    setCutoffHalf(1);
+  }
+}, [month]);
 
   const { getPosition, loading: geoLoading, error: geoError } = useGeolocation();
 
@@ -161,8 +218,10 @@ export default function AttendancePage() {
         const { start, end } = getWeekRange(weekOffset);
         params.date_from = toDateString(start);
         params.date_to   = toDateString(end);
-      } else {
-        params.month = month;
+      } else if (filterMode === 'cutoff') {
+        const { from, to } = getCutoffRange(month, cutoffHalf);
+        params.date_from = from;
+        params.date_to   = to;
       }
       if (filterStatus) params.status = filterStatus;
       const data = await getAttendanceHistory(params);
@@ -172,7 +231,7 @@ export default function AttendancePage() {
     } finally {
       setLoadingHistory(false);
     }
-  }, [filterMode, selectedDay, weekOffset, month, filterStatus]);
+  }, [filterMode, selectedDay, weekOffset, month, cutoffHalf, filterStatus]);
 
   useEffect(() => {
     const loadPage = async () => {
@@ -216,6 +275,14 @@ export default function AttendancePage() {
       showToast('error', err?.response?.data?.message ?? err.message ?? 'Time Out failed.');
     } finally { setSubmitting(false); }
   };
+
+  // ── Cutoff chip label ───────────────────────────────────────────────────────
+  const cutoffLabel = (() => {
+    const monthName = new Date(`${month}-01`).toLocaleDateString('en-PH', { month: 'long', year: 'numeric' });
+    if (cutoffHalf === 1)      return `${monthName} · 1–15`;
+    if (cutoffHalf === 2)      return `${monthName} · 16–${getLastDayOfMonth(month)}`;
+    if (cutoffHalf === 'full') return `${monthName} · Full Month`;
+  })();
 
   const isWorking  = submitting || geoLoading;
   const canTimeIn  = !todayRecord?.time_in;
@@ -284,28 +351,6 @@ export default function AttendancePage() {
               </div>
             </div>
 
-            {/* Hours Worked + Late By — shown once time_in exists */}
-            {todayRecord?.time_in && (
-              <div className="grid grid-cols-2 gap-4 mb-6">
-                <div className="rounded-xl bg-gray-50 border border-gray-100 p-4 text-center">
-                  <p className="text-xs text-gray-400 uppercase tracking-wider mb-1">Hours Worked</p>
-                  <p className="text-xl font-bold text-gray-900 tabular-nums">
-                    {calcHoursWorked(todayRecord.time_in, todayRecord.time_out) === '—'
-                      ? <span className="text-gray-300">In progress</span>
-                      : calcHoursWorked(todayRecord.time_in, todayRecord.time_out)}
-                  </p>
-                </div>
-                <div className="rounded-xl bg-gray-50 border border-gray-100 p-4 text-center">
-                  <p className="text-xs text-gray-400 uppercase tracking-wider mb-1">Late By</p>
-                  <p className="text-xl font-bold tabular-nums">
-                    {todayRecord.status === 'Late'
-                      ? <span className="text-amber-500">{calcLateBy(todayRecord.time_in, todayRecord.status)}</span>
-                      : <span className="text-gray-300">—</span>}
-                  </p>
-                </div>
-              </div>
-            )}
-
             {isComplete ? (
               <div className="flex items-center justify-center gap-2 py-3 rounded-xl bg-emerald-50 border border-emerald-100">
                 <span className="text-emerald-600 text-sm font-semibold">✓ Attendance complete for today</span>
@@ -344,11 +389,11 @@ export default function AttendancePage() {
           <div className="px-6 pt-5 pb-4 border-b border-gray-100">
             <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wider mb-4">Attendance History</h2>
 
-            {/* Period tabs */}
+            {/* Period tabs — By Month replaced by By Cutoff */}
             <div className="flex flex-wrap gap-2 mb-4">
-              <FilterTab label="By Day"   active={filterMode === 'day'}   onClick={() => setFilterMode('day')} />
-              <FilterTab label="By Week"  active={filterMode === 'week'}  onClick={() => setFilterMode('week')} />
-              <FilterTab label="By Month" active={filterMode === 'month'} onClick={() => setFilterMode('month')} />
+              <FilterTab label="By Day"    active={filterMode === 'day'}    onClick={() => setFilterMode('day')}    />
+              <FilterTab label="By Week"   active={filterMode === 'week'}   onClick={() => setFilterMode('week')}   />
+              <FilterTab label="By Cutoff" active={filterMode === 'cutoff'} onClick={() => setFilterMode('cutoff')} />
             </div>
 
             {/* Period + status filters */}
@@ -358,6 +403,7 @@ export default function AttendancePage() {
                   onChange={(e) => setSelectedDay(e.target.value)}
                   className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-gray-900" />
               )}
+
               {filterMode === 'week' && (
                 <div className="flex items-center gap-2">
                   <button onClick={() => setWeekOffset(w => w - 1)}
@@ -367,9 +413,32 @@ export default function AttendancePage() {
                     className="w-8 h-8 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 flex items-center justify-center disabled:opacity-30">›</button>
                 </div>
               )}
-              {filterMode === 'month' && (
-                <input type="month" value={month} onChange={(e) => setMonth(e.target.value)}
-                  className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-gray-900" />
+
+              {/* ── Cutoff controls: month picker + 3 pills ──────────── */}
+              {filterMode === 'cutoff' && (
+                <div className="flex items-center gap-2 flex-wrap">
+                  <input
+                    type="month"
+                    value={month}
+                    onChange={(e) => setMonth(e.target.value)}
+                    className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                  <CutoffPill
+                    label="1st – 15th"
+                    active={cutoffHalf === 1}
+                    onClick={() => setCutoffHalf(1)}
+                  />
+                  <CutoffPill
+                    label={`16th – ${getLastDayOfMonth(month)}th`}
+                    active={cutoffHalf === 2}
+                    onClick={() => setCutoffHalf(2)}
+                  />
+                  <CutoffPill
+                    label="Full Month"
+                    active={cutoffHalf === 'full'}
+                    onClick={() => setCutoffHalf('full')}
+                  />
+                </div>
               )}
 
               {/* Status buttons */}
@@ -388,6 +457,15 @@ export default function AttendancePage() {
                 ))}
               </div>
             </div>
+
+            {/* Cutoff chip */}
+            {filterMode === 'cutoff' && (
+              <div className="mt-3">
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-indigo-50 text-indigo-700 border border-indigo-100">
+                  📅 {cutoffLabel}
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Stats */}

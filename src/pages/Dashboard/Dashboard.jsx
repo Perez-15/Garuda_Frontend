@@ -1,24 +1,31 @@
+// pages/Dashboard/Dashboard.jsx
 import { useState, useEffect } from 'react';
 import {
   UserCheck, Building2, UserCog, ClipboardList,
   RefreshCw, AlertTriangle, TrendingUp, ArrowUpRight,
-  Users, CalendarDays,
+  Users, CalendarDays, Briefcase, Archive,
 } from 'lucide-react';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import { dashboardService } from '../../services/dashboardService';
-import { useAuth } from '../../contexts/AuthContext';
+import { applicantService } from '../../services/applicantService';
+import { employeeService  } from '../../services/hiredService';
+import { useAuth          } from '../../contexts/AuthContext';
 
 // ─── Stat Card ────────────────────────────────────────────────────────────────
-function StatCard({ title, value, icon: Icon, color, sub, trend }) {
+import { Link } from 'react-router-dom';
+
+function StatCard({ title, value, icon: Icon, color, sub, to, trend }) {
   const colors = {
     green:  { bg: 'bg-green-50',  icon: 'text-green-500',  border: 'border-green-200',  val: 'text-green-700'  },
     blue:   { bg: 'bg-blue-50',   icon: 'text-blue-500',   border: 'border-blue-200',   val: 'text-blue-700'   },
     red:    { bg: 'bg-red-50',    icon: 'text-red-500',    border: 'border-red-200',    val: 'text-red-700'    },
     purple: { bg: 'bg-purple-50', icon: 'text-purple-500', border: 'border-purple-200', val: 'text-purple-700' },
+    amber:  { bg: 'bg-amber-50',  icon: 'text-amber-500',  border: 'border-amber-200',  val: 'text-amber-700'  },
+    teal:   { bg: 'bg-teal-50',   icon: 'text-teal-500',   border: 'border-teal-200',   val: 'text-teal-700'   },
   };
   const c = colors[color] || colors.blue;
-  return (
-    <div className={`bg-white rounded-xl shadow-sm border ${c.border} p-5 flex items-center gap-4 hover:shadow-md transition-shadow`}>
+  const inner = (
+    <div className={`bg-white rounded-xl shadow-sm border ${c.border} p-5 flex items-center gap-4 hover:shadow-md transition-shadow ${to ? 'cursor-pointer' : ''}`}>
       <div className={`${c.bg} p-3 rounded-xl flex-shrink-0`}>
         <Icon className={`h-6 w-6 ${c.icon}`} />
       </div>
@@ -30,53 +37,108 @@ function StatCard({ title, value, icon: Icon, color, sub, trend }) {
         {sub && <p className="text-xs text-gray-400 mt-0.5">{sub}</p>}
       </div>
       {trend !== undefined && (
-        <div className={`flex items-center gap-0.5 text-xs font-semibold ${trend >= 0 ? 'text-green-500' : 'text-red-400'}`}>
+        <div className={`flex items-center gap-0.5 text-xs font-semibold flex-shrink-0 ${trend >= 0 ? 'text-green-500' : 'text-red-400'}`}>
           <ArrowUpRight className={`h-3.5 w-3.5 ${trend < 0 ? 'rotate-180' : ''}`} />
           {Math.abs(trend)}%
         </div>
       )}
     </div>
   );
+  return to ? <Link to={to}>{inner}</Link> : inner;
 }
 
-// ─── Hired Per Month Bar Chart ────────────────────────────────────────────────
+// ─── Hired Per Month Line Chart ────────────────────────────────────────────────
 function HiredTrendChart({ data }) {
-  if (!data || data.length === 0) {
+  if (!data || data.length === 0)
     return <p className="text-gray-400 text-center py-8 text-sm">No data available</p>;
-  }
-  const max = Math.max(...data.map((d) => d.count), 1);
+
+  const max    = Math.max(...data.map((d) => d.count), 1);
+  const width  = 500;
+  const height = 140;
+  const padX   = 24;
+  const padY   = 16;
+  const innerW = width - padX * 2;
+  const innerH = height - padY * 2;
+
+  const points = data.map((d, i) => ({
+    x: padX + (data.length === 1 ? 0 : (i / (data.length - 1))) * innerW,
+    y: padY + (1 - d.count / max) * innerH,
+    count: d.count,
+    month: d.month ?? d.week,
+  }));
+
+  const pathD = points
+    .map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`)
+    .join(' ');
+
+  // Area fill path — close down to the bottom
+  const areaD = pathD
+    + ` L ${points[points.length - 1].x} ${height - padY}`
+    + ` L ${points[0].x} ${height - padY} Z`;
+
   return (
-    <div className="flex items-end gap-2 h-40 pt-4">
-      {data.map((item, i) => {
-        const pct = Math.max((item.count / max) * 100, 4);
-        return (
-          <div key={i} className="flex-1 flex flex-col items-center gap-1 group">
-            <span className="text-xs font-semibold text-gray-700 opacity-0 group-hover:opacity-100 transition-opacity">
-              {item.count}
-            </span>
-            <div className="w-full relative rounded-t-md overflow-hidden bg-gray-100" style={{ height: '100px' }}>
-              <div
-                className="absolute bottom-0 w-full bg-green-500 rounded-t-md transition-all duration-700 group-hover:bg-green-600"
-                style={{ height: `${pct}%` }}
-              />
-            </div>
-            <span className="text-xs text-gray-400 whitespace-nowrap">{item.month}</span>
-          </div>
-        );
-      })}
+    <div className="relative">
+      <svg
+        viewBox={`0 0 ${width} ${height}`}
+        className="w-full"
+        style={{ overflow: 'visible' }}
+      >
+        <defs>
+          <linearGradient id="lineGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%"   stopColor="#22c55e" stopOpacity="0.18" />
+            <stop offset="100%" stopColor="#22c55e" stopOpacity="0"    />
+          </linearGradient>
+        </defs>
+
+        {/* Area fill */}
+        <path d={areaD} fill="url(#lineGrad)" />
+
+        {/* Line */}
+        <path d={pathD} fill="none" stroke="#22c55e" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
+
+        {/* Dots + tooltips */}
+        {points.map((p, i) => (
+          <g key={i} className="group">
+            <circle cx={p.x} cy={p.y} r="10" fill="transparent" />
+            <circle cx={p.x} cy={p.y} r="4" fill="white" stroke="#22c55e" strokeWidth="2.5" />
+            {/* Hover count label */}
+            <text
+              x={p.x}
+              y={p.y - 10}
+              textAnchor="middle"
+              fontSize="11"
+              fontWeight="600"
+              fill="#15803d"
+              className="opacity-0 group-hover:opacity-100 transition-opacity"
+            >
+              {p.count}
+            </text>
+          </g>
+        ))}
+
+        {/* X-axis month labels */}
+        {points.map((p, i) => (
+          <text
+            key={i}
+            x={p.x}
+            y={height + 4}
+            textAnchor="middle"
+            fontSize="10"
+            fill="#9ca3af"
+          >
+            {p.month}
+          </text>
+        ))}
+      </svg>
     </div>
   );
 }
-
 // ─── Source Bar ───────────────────────────────────────────────────────────────
 function SourceBar({ source, count, max }) {
-  const pct = Math.max((count / max) * 100, 2);
-  const colors = [
-    'bg-blue-500', 'bg-indigo-500', 'bg-violet-500',
-    'bg-purple-500', 'bg-fuchsia-500', 'bg-pink-500',
-  ];
-  const colorIdx = ['WordPress','Gmail','Facebook','BossJobs','Walk-in','Referral'].indexOf(source) % colors.length;
-  const color = colors[Math.max(colorIdx, 0)];
+  const pct    = Math.max((count / max) * 100, 2);
+  const colors = ['bg-blue-500', 'bg-indigo-500', 'bg-violet-500', 'bg-purple-500', 'bg-fuchsia-500', 'bg-pink-500'];
+  const idx    = ['WordPress', 'Gmail', 'Facebook', 'BossJobs', 'Walk-in', 'Referral'].indexOf(source) % colors.length;
+  const color  = colors[Math.max(idx, 0)];
   return (
     <div className="space-y-1">
       <div className="flex items-center justify-between">
@@ -84,10 +146,7 @@ function SourceBar({ source, count, max }) {
         <span className="text-sm font-bold text-gray-900">{count}</span>
       </div>
       <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-        <div
-          className={`h-full ${color} rounded-full transition-all duration-700`}
-          style={{ width: `${pct}%` }}
-        />
+        <div className={`h-full ${color} rounded-full transition-all duration-700`} style={{ width: `${pct}%` }} />
       </div>
     </div>
   );
@@ -96,11 +155,11 @@ function SourceBar({ source, count, max }) {
 // ─── Activity Item ────────────────────────────────────────────────────────────
 function ActivityItem({ type, name, detail, time }) {
   const config = {
-    hired:   { dot: 'bg-green-500',  label: 'Hired'    },
-    moved:   { dot: 'bg-blue-500',   label: 'Moved'    },
-    created: { dot: 'bg-indigo-500', label: 'Added'    },
-    updated: { dot: 'bg-yellow-500', label: 'Updated'  },
-    default: { dot: 'bg-gray-400',   label: 'Activity' },
+    hired:   { dot: 'bg-green-500'  },
+    moved:   { dot: 'bg-blue-500'   },
+    created: { dot: 'bg-indigo-500' },
+    updated: { dot: 'bg-yellow-500' },
+    default: { dot: 'bg-gray-400'   },
   };
   const c = config[type] || config.default;
   return (
@@ -122,34 +181,60 @@ function ActivityItem({ type, name, detail, time }) {
 // ─── Main Dashboard ───────────────────────────────────────────────────────────
 export default function Dashboard() {
   const { user: currentUser } = useAuth();
-  const [loading, setLoading]   = useState(true);
-  const [data, setData]         = useState(null);
-  const [error, setError]       = useState(null);
 
-  useEffect(() => { fetchDashboard(); }, []);
+  const [loading,        setLoading]        = useState(true);
+  const [dashData,       setDashData]       = useState(null);
+  const [applicantStats, setApplicantStats] = useState(null);
+  const [employeeStats,  setEmployeeStats]  = useState(null);
+  const [error,          setError]          = useState(null);
+  const [hiresFilter, setHiresFilter] = useState('monthly');
+  
 
-  const fetchDashboard = async () => {
+
+  
+  useEffect(() => { fetchAll(); }, []);
+
+  const fetchAll = async () => {
     try {
       setLoading(true);
       setError(null);
-      const response = await dashboardService.getDashboard();
-      setData(response);
-    } catch (err) {
+      const [dashRes, aStats, eStats] = await Promise.all([
+        dashboardService.getDashboard(),
+        applicantService.getStats({}),
+        employeeService.getStats({}),
+      ]);
+      setDashData(dashRes);
+      setApplicantStats(aStats);
+      setEmployeeStats(eStats);
+    } catch {
       setError('Failed to load dashboard data');
-      console.error(err);
     } finally {
       setLoading(false);
     }
   };
 
-  // ── Loading ──
+  const applicantsBySource = dashData?.applicants_by_source || [];
+  const branchOverview     = dashData?.branch_overview      || [];
+  const recentActivity     = dashData?.recent_activity      || [];
+  const hiredPerMonth      = dashData?.hired_per_month      || [];
+  const hiredPerWeek = dashData?.hired_per_week || [];
+  const maxSource          = Math.max(...applicantsBySource.map((s) => s.count), 1);
+
+  const greeting = currentUser?.name
+    ? `Welcome back, ${currentUser.name.split(' ')[0]}!`
+    : 'Welcome back!';
+
+  // ── Loading ──────────────────────────────────────────────────────────────
   if (loading) {
     return (
       <DashboardLayout>
         <div className="animate-pulse space-y-6">
           <div className="h-7 bg-gray-200 rounded w-1/4" />
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            {[...Array(4)].map((_, i) => <div key={i} className="bg-white rounded-xl h-24 shadow-sm" />)}
+          <div className="grid grid-cols-2 xl:grid-cols-5 gap-4">
+            {[...Array(5)].map((_, i) => <div key={i} className="bg-white rounded-xl h-24 shadow-sm" />)}
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {[...Array(2)].map((_, i) => <div key={i} className="bg-white rounded-xl h-64 shadow-sm" />)}
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {[...Array(3)].map((_, i) => <div key={i} className="bg-white rounded-xl h-64 shadow-sm" />)}
@@ -159,7 +244,7 @@ export default function Dashboard() {
     );
   }
 
-  // ── Error ──
+  // ── Error ────────────────────────────────────────────────────────────────
   if (error) {
     return (
       <DashboardLayout>
@@ -167,8 +252,8 @@ export default function Dashboard() {
           <div className="bg-red-50 border border-red-200 text-red-600 px-6 py-4 rounded-xl flex items-center gap-3">
             <AlertTriangle className="h-5 w-5" /><span>{error}</span>
           </div>
-          <button onClick={fetchDashboard}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors">
+          <button onClick={fetchAll}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700">
             <RefreshCw className="h-4 w-4" /> Retry
           </button>
         </div>
@@ -176,81 +261,112 @@ export default function Dashboard() {
     );
   }
 
-  const summary            = data?.summary            || {};
-  const applicantsBySource = data?.applicants_by_source || [];
-  const branchOverview     = data?.branch_overview     || [];
-  const recentActivity     = data?.recent_activity     || [];
-  const hiredPerMonth      = data?.hired_per_month     || [];
-
-  const maxSource = Math.max(...applicantsBySource.map((s) => s.count), 1);
-
-  const userRole = currentUser?.roles?.[0]?.name ?? currentUser?.role ?? '';
-  const greeting = currentUser?.name ? `Welcome back, ${currentUser.name.split(' ')[0]}!` : 'Welcome back!';
-
   return (
     <DashboardLayout>
       <div className="space-y-6">
 
-        {/* ── Header ── */}
+        {/* ── Header ──────────────────────────────────────────────────────── */}
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
             <p className="text-gray-500 text-sm mt-0.5">{greeting} Here's what's happening today.</p>
           </div>
-          <button onClick={fetchDashboard}
+          <button onClick={fetchAll}
             className="inline-flex items-center gap-2 px-3 py-2 text-sm text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors shadow-sm">
             <RefreshCw className="h-4 w-4" /> Refresh
           </button>
         </div>
 
-        {/* ── Stat Cards ── */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* ── 5 KPI Cards (absorbed from ApplicantsPage) ───────────────────── */}
+        <div className="grid grid-cols-2 xl:grid-cols-5 gap-4">
           <StatCard
-            title="Hired Employees"
-            value={summary.hired_employees}
+            title="Overall Hired"
+            value={applicantStats?.hired}
             icon={UserCheck}
             color="green"
-            sub="Active & deployed"
+            sub="All time placements"
+            to="/employees"
+          />
+          <StatCard
+            title="Currently Active"
+            value={applicantStats?.active_employees}
+            icon={Briefcase}
+            color="teal"
+            sub="Currently deployed"
+            to="/employees"
           />
           <StatCard
             title="In-Process"
-            value={summary.in_process}
+            value={applicantStats?.in_process}
             icon={UserCog}
             color="blue"
             sub="In hiring pipeline"
+            to="/in-process"
           />
           <StatCard
-            title="Total Branches"
-            value={summary.total_branches}
-            icon={Building2}
-            color="purple"
-            sub="Across all clients"
+            title="Pooling"
+            value={applicantStats?.pooling}
+            icon={Archive}
+            color="amber"
+            sub="Talent pool"
+            to="/in-process"
           />
           <StatCard
             title="Incomplete Docs"
-            value={summary.incomplete_requirements}
+            value={employeeStats?.requirements_incomplete}
             icon={ClipboardList}
             color="red"
             sub="Needs attention"
+            to="/employees"
           />
         </div>
 
-        {/* ── Row 2: Hired Trend + Source Chart ── */}
+        {/* ── Charts row ───────────────────────────────────────────────────── */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
           {/* Hired per Month */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100">
-            <div className="px-5 py-4 border-b border-gray-50 flex items-center justify-between">
-              <div>
-                <h3 className="text-base font-semibold text-gray-900">Hired per Month</h3>
-                <p className="text-xs text-gray-400 mt-0.5">Last 6 months</p>
-              </div>
-              <TrendingUp className="h-5 w-5 text-green-400" />
-            </div>
-            <div className="p-5">
-              <HiredTrendChart data={hiredPerMonth} />
-            </div>
-          </div>
+<div className="bg-white rounded-xl shadow-sm border border-gray-100">
+  <div className="px-5 py-4 border-b border-gray-50 flex items-center justify-between">
+    
+    <div>
+      <h3 className="text-base font-semibold text-gray-900">Hiring Trend</h3>
+      <p className="text-xs text-gray-400 mt-0.5">
+        {hiresFilter === 'monthly' ? 'Last 6 months' : 'Last 8 weeks'}
+      </p>
+    </div>
+
+    <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
+      <button
+        onClick={() => setHiresFilter('monthly')}
+        className={`px-3 py-1 text-xs font-medium rounded-md ${
+          hiresFilter === 'monthly'
+            ? 'bg-white text-gray-900 shadow-sm'
+            : 'text-gray-500'
+        }`}
+      >
+        Monthly
+      </button>
+
+      <button
+        onClick={() => setHiresFilter('weekly')}
+        className={`px-3 py-1 text-xs font-medium rounded-md ${
+          hiresFilter === 'weekly'
+            ? 'bg-white text-gray-900 shadow-sm'
+            : 'text-gray-500'
+        }`}
+      >
+        Weekly
+      </button>
+    </div>
+
+  </div>
+
+  <div className="p-5">
+    <HiredTrendChart
+      data={hiresFilter === 'monthly' ? hiredPerMonth : hiredPerWeek}
+    />
+  </div>
+</div>
 
           {/* Applicants by Source */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-100">
@@ -273,10 +389,10 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* ── Row 3: Branch Overview + Recent Activity ── */}
+        {/* ── Branch Overview + Recent Activity ────────────────────────────── */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
-          {/* Branch Overview — takes 2 cols */}
+          {/* Branch Overview */}
           <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-gray-100">
             <div className="px-5 py-4 border-b border-gray-50 flex items-center justify-between">
               <div>

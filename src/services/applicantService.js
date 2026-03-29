@@ -1,6 +1,9 @@
 import apiClient from '../api/axios';
 
 export const applicantService = {
+
+  // ── List & Stats ────────────────────────────────────────────────────────────
+
   getAll: async (params = {}) => {
     const response = await apiClient.get('/applicants', { params });
     return response.data;
@@ -11,13 +14,13 @@ export const applicantService = {
     return response.data;
   },
 
-  // Strips only pagination + sort params — all filter params (date, ta_id, etc.) are kept
-  // so stat cards always reflect the same scope as the table
   getStats: async (params = {}) => {
     const { page, per_page, sort_by, sort_dir, ...statsParams } = params;
     const response = await apiClient.get('/applicants/stats', { params: statsParams });
     return response.data;
   },
+
+  // ── Create ──────────────────────────────────────────────────────────────────
 
   create: async (data) => {
     const response = await apiClient.post('/applicants', data, {
@@ -25,6 +28,8 @@ export const applicantService = {
     });
     return response.data;
   },
+
+  // ── Update ──────────────────────────────────────────────────────────────────
 
   update: async (id, data) => {
     const response = await apiClient.post(`/applicants/${id}`, data, {
@@ -36,10 +41,40 @@ export const applicantService = {
     return response.data;
   },
 
+  // ── Delete (soft) ───────────────────────────────────────────────────────────
+
   delete: async (id) => {
     const response = await apiClient.delete(`/applicants/${id}`);
     return response.data;
   },
+
+  // ── Trash ───────────────────────────────────────────────────────────────────
+
+  /**
+   * Get all soft-deleted applicants (admin only).
+   */
+  getTrashed: async (params = {}) => {
+    const response = await apiClient.get('/applicants/trashed', { params });
+    return response.data;
+  },
+
+  /**
+   * Restore a soft-deleted applicant (and linked employee if exists).
+   */
+  restore: async (id) => {
+    const response = await apiClient.patch(`/applicants/${id}/restore`);
+    return response.data;
+  },
+
+  /**
+   * Permanently delete a soft-deleted applicant (and linked employee).
+   */
+  forceDelete: async (id) => {
+    const response = await apiClient.delete(`/applicants/${id}/force-delete`);
+    return response.data;
+  },
+
+  // ── Workflow ─────────────────────────────────────────────────────────────────
 
   moveStep: async (id, direction, stepId = null) => {
     const payload = { direction };
@@ -52,6 +87,8 @@ export const applicantService = {
     const response = await apiClient.patch(`/applicants/${id}/status`, { status });
     return response.data;
   },
+
+  // ── Notes & Activities ───────────────────────────────────────────────────────
 
   addNote: async (id, note) => {
     const response = await apiClient.post(`/applicants/${id}/notes`, { note });

@@ -20,6 +20,8 @@ import {
   UserCog,
   Clock,
   Settings2,
+  TrendingUp,
+  Trash2,
 } from 'lucide-react';
 
 export default function DashboardLayout({ children }) {
@@ -34,7 +36,8 @@ export default function DashboardLayout({ children }) {
   };
 
   const userRole = user?.roles?.[0]?.name;
-  const isTA = userRole === 'talent_acquisition';
+  const isTA     = userRole === 'talent_acquisition';
+  const isAdmin  = userRole === 'super_admin' || userRole === 'hr_admin';
 
   // ── Active check helpers ───────────────────────────────────────────────────
   const isActive     = (path) => location.pathname === path;
@@ -46,12 +49,12 @@ export default function DashboardLayout({ children }) {
     isStartsWith('/in-process') ||
     isStartsWith('/employees');
   const attendanceOpen = isStartsWith('/attendance');
-
- const settingsOpen =
-  isStartsWith('/clients') ||
-  isStartsWith('/branches') ||
-  isStartsWith('/manage-columns') ||
-  isStartsWith('/workflows'); 
+  const settingsOpen =
+    isStartsWith('/clients')         ||
+    isStartsWith('/branches')        ||
+    isStartsWith('/manage-columns')  ||
+    isStartsWith('/workflows')       ||
+    isStartsWith('/recently-deleted');
 
   // ── Lifted group toggle state (keyed by group name) ────────────────────────
   const [openGroups, setOpenGroups] = useState({
@@ -80,7 +83,6 @@ export default function DashboardLayout({ children }) {
       icon: Users,
       group: true,
       children: [
-        { name: 'All Applicants', href: '/applicants', icon: Users,    exact: true },
         { name: 'In-Process',     href: '/in-process', icon: UserCog              },
         { name: 'Employed',       href: '/employees',  icon: UserCheck             },
       ],
@@ -90,6 +92,11 @@ export default function DashboardLayout({ children }) {
       href: '/internal/employees',
       icon: UsersIcon,
     },
+
+    ...(isAdmin
+      ? [{ name: 'Performance', href: '/performance', icon: TrendingUp }]
+      : []),
+
     {
       name: 'Attendance',
       icon: Clock,
@@ -105,66 +112,61 @@ export default function DashboardLayout({ children }) {
     },
 
     ...(!isTA
-      ? [
-          { name: 'Reports', href: '/reports',   icon: FileText },
-        ]
+      ? [{ name: 'Reports', href: '/reports', icon: FileText }]
       : []),
 
-    ...(userRole === 'super_admin' || userRole === 'hr_admin'
+    ...(isAdmin
       ? [{ name: 'Users', href: '/users', icon: UsersIcon }]
       : []),
 
- {
+    {
       name: 'Settings',
       icon: Settings2,
       group: true,
       children: [
-   {
-      name: 'Clients',
-      href: '/clients',
-      icon: Building2,
-    },
-    {
-      name: 'Branches',
-      href: '/branches',
-      icon: MapPin,
-    },
+        { name: 'Clients',  href: '/clients',  icon: Building2 },
+        { name: 'Branches', href: '/branches', icon: MapPin    },
 
-       ...(!isTA
-      ? [
-          { name: 'Process', href: '/workflows', icon: Workflow },
-    ]
-      : []),
-           ...(userRole === 'super_admin' || userRole === 'hr_admin'
-  ? [{ name: 'Manage Columns', href: '/manage-columns', icon: Settings2 }]
-  : []),
-           ],
-          },
+        ...(!isTA
+          ? [{ name: 'Process', href: '/workflows', icon: Workflow }]
+          : []),
+
+        ...(isAdmin
+          ? [{ name: 'Manage Columns', href: '/manage-columns', icon: Settings2 }]
+          : []),
+
+        // Recently Deleted — admin only, tucked at the bottom of Settings
+        ...(isAdmin
+          ? [{
+              name: 'Recently Deleted',
+              href: '/recently-deleted',
+              icon: Trash2,
+            }]
+          : []),
+      ],
+    },
   ];
-
 
   // ── Logo ───────────────────────────────────────────────────────────────────
   const LogoBrand = () => (
     <div className="flex items-center gap-3">
       <img src={logo} alt="Garuda HR" className="h-10 w-10 object-contain flex-shrink-0" />
       <div className="flex flex-col">
-        <span className="text-white font-bold text-sm leading-tight">Garuda HR</span>
+        <span className="text-white font-bold text-sm leading-tight">Garuda</span>
         <span className="text-gray-400 text-xs leading-tight">Recruitment Agency</span>
       </div>
     </div>
   );
 
   // ── Nav item renderer ──────────────────────────────────────────────────────
-  // NOTE: No useState inside here — all state lives in DashboardLayout above.
   const NavItem = ({ item, onLinkClick }) => {
     if (item.group) {
-   const isGroupActive =
-  item.name === 'External'   ? applicantsOpen :
-  item.name === 'Attendance' ? attendanceOpen :
-  item.name === 'Settings'   ? settingsOpen :
-  false;
+      const isGroupActive =
+        item.name === 'External'   ? applicantsOpen :
+        item.name === 'Attendance' ? attendanceOpen :
+        item.name === 'Settings'   ? settingsOpen   :
+        false;
 
-      // Use lifted state; also force-open when on a child route
       const isOpen = openGroups[item.name] || isGroupActive;
 
       return (
@@ -194,6 +196,9 @@ export default function DashboardLayout({ children }) {
                     ? true
                     : isActive(child.href);
 
+                // "Recently Deleted" gets a subtle red tint to signal danger zone
+                const isDeleted = child.href === '/recently-deleted';
+
                 return (
                   <Link
                     key={child.name}
@@ -201,8 +206,12 @@ export default function DashboardLayout({ children }) {
                     onClick={onLinkClick}
                     className={`flex items-center px-2 py-1.5 text-sm rounded-md transition-colors
                       ${active
-                        ? 'bg-gray-700 text-white font-medium'
-                        : 'text-gray-400 hover:bg-gray-700 hover:text-white'}`}
+                        ? isDeleted
+                          ? 'bg-red-900/40 text-red-300 font-medium'
+                          : 'bg-gray-700 text-white font-medium'
+                        : isDeleted
+                          ? 'text-red-400 hover:bg-red-900/30 hover:text-red-300'
+                          : 'text-gray-400 hover:bg-gray-700 hover:text-white'}`}
                   >
                     <child.icon className="mr-2.5 h-4 w-4 flex-shrink-0" />
                     {child.name}

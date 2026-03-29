@@ -1,3 +1,4 @@
+// pages/Internal/InternalEmployeesPage.jsx
 import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import {
@@ -11,6 +12,7 @@ import { userService } from '../../services/userService';
 import { customColumnService } from '../../services/customcolumnService';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import { usePersistedColumns } from '../../hooks/usePersistedColumns';
 
 const PAGE = 'internal_employees';
 
@@ -192,9 +194,9 @@ function UserModal({ onClose, onSaved, canManage }) {
   };
 
   const docOptions = [
-    { value: 'submitted', label: '✓ Submitted' },
-    { value: 'pending',   label: '⏳ Pending'   },
-    { value: 'not_required', label: 'N/A'       },
+    { value: 'submitted',    label: '✓ Submitted' },
+    { value: 'pending',      label: '⏳ Pending'   },
+    { value: 'not_required', label: 'N/A'          },
   ];
 
   return (
@@ -283,8 +285,10 @@ function UserModal({ onClose, onSaved, canManage }) {
                 <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Government IDs</p>
                 <div className="grid grid-cols-2 gap-3">
                   {[
-                    { field: 'sss', label: 'SSS No.' }, { field: 'pagibig', label: 'Pag-IBIG No.' },
-                    { field: 'philhealth', label: 'PhilHealth No.' }, { field: 'tin', label: 'TIN No.' },
+                    { field: 'sss',        label: 'SSS No.'        },
+                    { field: 'pagibig',    label: 'Pag-IBIG No.'   },
+                    { field: 'philhealth', label: 'PhilHealth No.' },
+                    { field: 'tin',        label: 'TIN No.'        },
                   ].map(({ field, label }) => (
                     <div key={field}>
                       <label className="block text-xs font-semibold text-gray-500 mb-1">{label}</label>
@@ -329,13 +333,13 @@ function UserModal({ onClose, onSaved, canManage }) {
 
 // ── Manage Columns Modal ──────────────────────────────────────────────────────
 function ManageColumnsModal({ customCols, onClose, onRefresh }) {
-  const [cols, setCols]         = useState(customCols.map((c) => ({ ...c })));
-  const [newLabel, setNewLabel] = useState('');
-  const [newType, setNewType]   = useState('text');
+  const [cols, setCols]           = useState(customCols.map((c) => ({ ...c })));
+  const [newLabel, setNewLabel]   = useState('');
+  const [newType, setNewType]     = useState('text');
   const [editingId, setEditingId] = useState(null);
   const [editLabel, setEditLabel] = useState('');
-  const [saving, setSaving]     = useState(false);
-  const [error, setError]       = useState('');
+  const [saving, setSaving]       = useState(false);
+  const [error, setError]         = useState('');
 
   const handleAdd = async () => {
     const trimmed = newLabel.trim();
@@ -386,7 +390,7 @@ function ManageColumnsModal({ customCols, onClose, onRefresh }) {
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <div>
             <h3 className="text-base font-semibold text-gray-900">Manage Table Columns</h3>
-            <p className="text-xs text-gray-400 mt-0.5">Changes are saved directly to the database</p>
+            <p className="text-xs text-gray-400 mt-0.5">Changes here apply to <span className="font-semibold text-gray-600">all users</span></p>
           </div>
           <button onClick={handleDone} className="text-gray-400 hover:text-gray-600"><X className="h-5 w-5" /></button>
         </div>
@@ -468,7 +472,8 @@ function ManageColumnsModal({ customCols, onClose, onRefresh }) {
 // ─────────────────────────────────────────────────────────────────────────────
 export default function InternalEmployeesPage() {
   const { user: currentUser } = useAuth();
-  const navigate = useNavigate(); 
+  const navigate = useNavigate();
+
   const [users,       setUsers]       = useState([]);
   const [customCols,  setCustomCols]  = useState([]);
   const [loading,     setLoading]     = useState(true);
@@ -483,12 +488,14 @@ export default function InternalEmployeesPage() {
   const [reqFilter,    setReqFilter]    = useState('');
   const [statusFilter, setStatusFilter] = useState('');
 
-  const [visibleCols,    setVisibleCols]    = useState(DEFAULT_VISIBLE);
-  const [colOrder,       setColOrder]       = useState(DEFAULT_VISIBLE);
+  // ── Column management — persisted per user in localStorage ────────────────
+  const { visibleCols, colOrder, toggleColumn: _toggleColumn, setColOrder } =
+    usePersistedColumns('internal', currentUser?.id, DEFAULT_VISIBLE);
   const [showColPicker,  setShowColPicker]  = useState(false);
   const [showManageCols, setShowManageCols] = useState(false);
   const [showAddModal,   setShowAddModal]   = useState(false);
 
+  // ── Drag state ────────────────────────────────────────────────────────────
   const dragCol     = useRef(null);
   const dragOverCol = useRef(null);
   const [dragOverKey, setDragOverKey] = useState(null);
@@ -536,20 +543,12 @@ export default function InternalEmployeesPage() {
     ...customCols.map((c) => ({ key: `custom_${c.field_key}`, label: c.label, always: false, fixed: false, custom: true })),
   ];
 
-  const toggleColumn = (key) => {
-    const col = allColumnsWithCustom.find((c) => c.key === key);
-    if (col?.always) return;
-    if (visibleCols.includes(key)) {
-      setVisibleCols((v) => v.filter((k) => k !== key));
-      setColOrder((o) => o.filter((k) => k !== key));
-    } else {
-      setVisibleCols((v) => [...v, key]);
-      setColOrder((o) => [...o, key]);
-    }
-  };
+  // ── Column toggle (uses hook) ─────────────────────────────────────────────
+  const toggleColumn = (key) => _toggleColumn(key, allColumnsWithCustom);
 
   const activeColumns = colOrder.filter((k) => visibleCols.includes(k));
 
+  // ── Drag handlers — saves new order via hook's setColOrder ────────────────
   const onDragStart = (key) => { dragCol.current = key; setDragKey(key); };
   const onDragEnter = (key) => { dragOverCol.current = key; setDragOverKey(key); };
   const onDragEnd   = () => {
@@ -561,7 +560,7 @@ export default function InternalEmployeesPage() {
     const from = newOrder.indexOf(dragCol.current);
     const to   = newOrder.indexOf(dragOverCol.current);
     newOrder.splice(from, 1); newOrder.splice(to, 0, dragCol.current);
-    setColOrder(newOrder);
+    setColOrder(newOrder); // ← persists via hook
     dragCol.current = null; dragOverCol.current = null;
   };
 
@@ -589,12 +588,12 @@ export default function InternalEmployeesPage() {
             </p>
           </div>
           <div className="flex items-center gap-2">
-{canManage && (
-  <button onClick={() => navigate('/manage-columns')}
-    className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors shadow-sm">
-    <Settings2 className="h-4 w-4" /> Manage Columns
-  </button>
-)}
+            {canManage && (
+              <button onClick={() => navigate('/manage-columns')}
+                className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors shadow-sm">
+                <Settings2 className="h-4 w-4" /> Manage Columns
+              </button>
+            )}
             {canManage && (
               <button onClick={() => setShowAddModal(true)}
                 className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-colors shadow-sm">
@@ -649,7 +648,10 @@ export default function InternalEmployeesPage() {
               {showColPicker && (
                 <div className="absolute top-full left-0 mt-1 z-30 bg-white rounded-xl shadow-lg border border-gray-100 p-3 w-64">
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Show / Hide</span>
+                    <div>
+                      <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Show / Hide</span>
+                      <p className="text-xs text-gray-400 mt-0.5">Changes apply only to your account</p>
+                    </div>
                     <button onClick={() => setShowColPicker(false)}><X className="h-4 w-4 text-gray-400 hover:text-gray-600" /></button>
                   </div>
                   <div className="space-y-1 max-h-64 overflow-y-auto">
@@ -747,12 +749,10 @@ export default function InternalEmployeesPage() {
                         ))}
                         <td className="px-4 py-3.5 text-right">
                           <div className="flex items-center justify-end gap-1">
-                            {/* ── View Profile ── */}
                             <Link to={`/internal/users/${u.id}`}
                               className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors">
                               View <ChevronRight className="h-3.5 w-3.5" />
                             </Link>
-                            {/* ── Toggle active (admin only) ── */}
                             {canManage && (
                               <button onClick={() => handleToggleStatus(u)}
                                 className={`p-1.5 rounded-lg transition-colors ${u.is_active ? 'text-red-400 hover:bg-red-50' : 'text-green-500 hover:bg-green-50'}`}

@@ -1,10 +1,18 @@
+// pages/Positions/PositionsPage.jsx
 import { useState, useEffect } from 'react';
-import { Plus, Briefcase, Edit, Trash2, MapPin, Search } from 'lucide-react';
+import { Plus, Briefcase, Edit, Trash2, MapPin, Search, CalendarDays } from 'lucide-react';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import { positionService } from '../../services/positionService';
 import { clientService } from '../../services/clientService';
 import { branchService } from '../../services/branchService';
 import { useAuth } from '../../contexts/AuthContext';
+
+function formatDate(dateStr) {
+  if (!dateStr) return '—';
+  const d = new Date(dateStr);
+  if (isNaN(d)) return '—';
+  return d.toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' });
+}
 
 export default function PositionsPage() {
   const { user } = useAuth();
@@ -12,35 +20,30 @@ export default function PositionsPage() {
   const canManage = userRole === 'super_admin' || userRole === 'hr_admin';
 
   const [positions, setPositions] = useState([]);
-  const [clients, setClients] = useState([]);
-  const [branches, setBranches] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [clients,   setClients]   = useState([]);
+  const [branches,  setBranches]  = useState([]);
+  const [loading,   setLoading]   = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editingPosition, setEditingPosition] = useState(null);
 
-  // ── Filters ──
+  // ── Filters — start empty, restored from localStorage AFTER data loads ───
   const [searchFilter, setSearchFilter] = useState('');
   const [clientFilter, setClientFilter] = useState('');
   const [branchFilter, setBranchFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
 
   const [formData, setFormData] = useState({
-    client_id: '',
-    branch_id: '',
-    title: '',
+    client_id:   '',
+    branch_id:   '',
+    title:       '',
     description: '',
-    slots: '',
-    is_active: true,
+    slots:       '',
+    is_active:   true,
   });
 
   useEffect(() => {
     fetchData();
   }, []);
-
-  // Reset branch filter when client filter changes
-  useEffect(() => {
-    setBranchFilter('');
-  }, [clientFilter]);
 
   const fetchData = async () => {
     try {
@@ -53,6 +56,12 @@ export default function PositionsPage() {
       setPositions(positionsRes.data);
       setClients(clientsRes.data);
       setBranches(branchesRes.data);
+
+      // Restore filters AFTER data loads so dropdowns can match saved IDs
+      setSearchFilter(localStorage.getItem('pos_search') || '');
+      setClientFilter(localStorage.getItem('pos_client') || '');
+      setBranchFilter(localStorage.getItem('pos_branch') || '');
+      setStatusFilter(localStorage.getItem('pos_status') || '');
     } catch (error) {
       console.error('Error fetching data:', error);
     } finally {
@@ -60,29 +69,34 @@ export default function PositionsPage() {
     }
   };
 
-  // ── Filtered positions ──
+  // ── Filtered positions ────────────────────────────────────────────────────
   const filteredPositions = positions.filter((position) => {
     const matchSearch = searchFilter === '' ||
       position.title.toLowerCase().includes(searchFilter.toLowerCase()) ||
       position.client?.name?.toLowerCase().includes(searchFilter.toLowerCase());
-
-    const matchClient = clientFilter === '' ||
-      String(position.client_id) === String(clientFilter);
-
-    const matchBranch = branchFilter === '' ||
-      String(position.branch_id) === String(branchFilter);
-
+    const matchClient = clientFilter === '' || String(position.client_id) === String(clientFilter);
+    const matchBranch = branchFilter === '' || String(position.branch_id) === String(branchFilter);
     const matchStatus = statusFilter === '' ||
-      (statusFilter === 'active' && position.is_active) ||
+      (statusFilter === 'active'   && position.is_active) ||
       (statusFilter === 'inactive' && !position.is_active);
-
     return matchSearch && matchClient && matchBranch && matchStatus;
   });
 
-  // Branches filtered by selected client filter (for filter dropdown)
   const filteredBranchOptions = clientFilter
     ? branches.filter((b) => String(b.client_id) === String(clientFilter))
     : branches;
+
+  // ── Clear all filters + localStorage ─────────────────────────────────────
+  const clearAllFilters = () => {
+    setSearchFilter('');
+    setClientFilter('');
+    setBranchFilter('');
+    setStatusFilter('');
+    localStorage.removeItem('pos_search');
+    localStorage.removeItem('pos_client');
+    localStorage.removeItem('pos_branch');
+    localStorage.removeItem('pos_status');
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -105,12 +119,12 @@ export default function PositionsPage() {
   const handleEdit = (position) => {
     setEditingPosition(position);
     setFormData({
-      client_id: position.client_id,
-      branch_id: position.branch_id || '',
-      title: position.title,
+      client_id:   position.client_id,
+      branch_id:   position.branch_id || '',
+      title:       position.title,
       description: position.description || '',
-      slots: position.slots,
-      is_active: position.is_active,
+      slots:       position.slots,
+      is_active:   position.is_active,
     });
     setShowModal(true);
   };
@@ -132,7 +146,8 @@ export default function PositionsPage() {
     setShowModal(true);
   };
 
-  const getTotalSlots = () => filteredPositions.reduce((sum, pos) => sum + parseInt(pos.slots || 0), 0);
+  const getTotalSlots = () =>
+    filteredPositions.reduce((sum, pos) => sum + parseInt(pos.slots || 0), 0);
 
   return (
     <DashboardLayout>
@@ -203,30 +218,39 @@ export default function PositionsPage() {
               <input
                 type="text"
                 value={searchFilter}
-                onChange={(e) => setSearchFilter(e.target.value)}
+                onChange={(e) => {
+                  setSearchFilter(e.target.value);
+                  localStorage.setItem('pos_search', e.target.value);
+                }}
                 placeholder="Search position or client..."
                 className="block w-full pl-9 pr-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
               />
             </div>
 
-            {/* Client Filter */}
+            {/* Client — clears branch only when user manually changes it */}
             <select
               value={clientFilter}
-              onChange={(e) => setClientFilter(e.target.value)}
+              onChange={(e) => {
+                setClientFilter(e.target.value);
+                localStorage.setItem('pos_client', e.target.value);
+                setBranchFilter('');
+                localStorage.removeItem('pos_branch');
+              }}
               className="block w-full pl-3 pr-10 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
             >
               <option value="">All Clients</option>
               {clients.map((client) => (
-                <option key={client.id} value={client.id}>
-                  {client.name}
-                </option>
+                <option key={client.id} value={client.id}>{client.name}</option>
               ))}
             </select>
 
-            {/* Branch Filter */}
+            {/* Branch */}
             <select
               value={branchFilter}
-              onChange={(e) => setBranchFilter(e.target.value)}
+              onChange={(e) => {
+                setBranchFilter(e.target.value);
+                localStorage.setItem('pos_branch', e.target.value);
+              }}
               className="block w-full pl-3 pr-10 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
             >
               <option value="">All Branches</option>
@@ -238,10 +262,13 @@ export default function PositionsPage() {
               ))}
             </select>
 
-            {/* Status Filter */}
+            {/* Status */}
             <select
               value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
+              onChange={(e) => {
+                setStatusFilter(e.target.value);
+                localStorage.setItem('pos_status', e.target.value);
+              }}
               className="block w-full pl-3 pr-10 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
             >
               <option value="">All Status</option>
@@ -258,32 +285,29 @@ export default function PositionsPage() {
               {searchFilter && (
                 <span className="inline-flex items-center gap-1 px-2 py-1 bg-blue-50 text-blue-700 text-xs rounded-full">
                   "{searchFilter}"
-                  <button onClick={() => setSearchFilter('')} className="hover:text-blue-900">×</button>
+                  <button onClick={() => { setSearchFilter(''); localStorage.removeItem('pos_search'); }} className="hover:text-blue-900">×</button>
                 </span>
               )}
               {clientFilter && (
                 <span className="inline-flex items-center gap-1 px-2 py-1 bg-blue-50 text-blue-700 text-xs rounded-full">
                   {clients.find((c) => String(c.id) === String(clientFilter))?.name}
-                  <button onClick={() => setClientFilter('')} className="hover:text-blue-900">×</button>
+                  <button onClick={() => { setClientFilter(''); localStorage.removeItem('pos_client'); }} className="hover:text-blue-900">×</button>
                 </span>
               )}
               {branchFilter && (
                 <span className="inline-flex items-center gap-1 px-2 py-1 bg-green-50 text-green-700 text-xs rounded-full">
                   <MapPin className="h-3 w-3" />
                   {branches.find((b) => String(b.id) === String(branchFilter))?.branch_name}
-                  <button onClick={() => setBranchFilter('')} className="hover:text-green-900">×</button>
+                  <button onClick={() => { setBranchFilter(''); localStorage.removeItem('pos_branch'); }} className="hover:text-green-900">×</button>
                 </span>
               )}
               {statusFilter && (
                 <span className="inline-flex items-center gap-1 px-2 py-1 bg-purple-50 text-purple-700 text-xs rounded-full">
                   {statusFilter}
-                  <button onClick={() => setStatusFilter('')} className="hover:text-purple-900">×</button>
+                  <button onClick={() => { setStatusFilter(''); localStorage.removeItem('pos_status'); }} className="hover:text-purple-900">×</button>
                 </span>
               )}
-              <button
-                onClick={() => { setSearchFilter(''); setClientFilter(''); setBranchFilter(''); setStatusFilter(''); }}
-                className="text-xs text-gray-400 hover:text-red-500 ml-1"
-              >
+              <button onClick={clearAllFilters} className="text-xs text-gray-400 hover:text-red-500 ml-1">
                 Clear all
               </button>
             </div>
@@ -317,16 +341,11 @@ export default function PositionsPage() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredPositions.map((position) => (
-              <div
-                key={position.id}
-                className="bg-white shadow rounded-lg overflow-hidden hover:shadow-lg transition"
-              >
+              <div key={position.id} className="bg-white shadow rounded-lg overflow-hidden hover:shadow-lg transition">
                 <div className="p-6">
                   <div className="flex justify-between items-start mb-4">
                     <div className="flex-1">
-                      <h3 className="text-lg font-semibold text-gray-900 mb-1">
-                        {position.title}
-                      </h3>
+                      <h3 className="text-lg font-semibold text-gray-900 mb-1">{position.title}</h3>
                       <p className="text-sm text-gray-600">{position.client?.name}</p>
                       {position.branch && (
                         <p className="text-xs text-gray-500 flex items-center mt-1">
@@ -337,16 +356,10 @@ export default function PositionsPage() {
                     </div>
                     {canManage && (
                       <div className="flex space-x-2">
-                        <button
-                          onClick={() => handleEdit(position)}
-                          className="p-2 text-gray-400 hover:text-blue-600"
-                        >
+                        <button onClick={() => handleEdit(position)} className="p-2 text-gray-400 hover:text-blue-600">
                           <Edit className="h-4 w-4" />
                         </button>
-                        <button
-                          onClick={() => handleDelete(position.id)}
-                          className="p-2 text-gray-400 hover:text-red-600"
-                        >
+                        <button onClick={() => handleDelete(position.id)} className="p-2 text-gray-400 hover:text-red-600">
                           <Trash2 className="h-4 w-4" />
                         </button>
                       </div>
@@ -354,27 +367,31 @@ export default function PositionsPage() {
                   </div>
 
                   {position.description && (
-                    <p className="text-sm text-gray-600 mb-4 line-clamp-2">
-                      {position.description}
-                    </p>
+                    <p className="text-sm text-gray-600 mb-4 line-clamp-2">{position.description}</p>
                   )}
 
-                  <div className="flex items-center justify-between pt-4 border-t">
-                    <div className="flex items-center">
-                      <Briefcase className="h-5 w-5 text-blue-500 mr-2" />
-                      <span className="text-lg font-bold text-gray-900">{position.slots}</span>
-                      <span className="text-sm text-gray-500 ml-1">
-                        {position.slots === 1 ? 'slot' : 'slots'}
+                  {/* ── Bottom row: slots + status + created date ── */}
+                  <div className="flex items-center justify-between pt-4 border-t border-gray-100">
+                    <div className="flex items-center gap-3">
+                      <div className="flex items-center">
+                        <Briefcase className="h-4 w-4 text-blue-500 mr-1.5" />
+                        <span className="text-base font-bold text-gray-900">{position.slots}</span>
+                        <span className="text-xs text-gray-500 ml-1">
+                          {parseInt(position.slots) === 1 ? 'slot' : 'slots'}
+                        </span>
+                      </div>
+                      <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${
+                        position.is_active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                      }`}>
+                        {position.is_active ? 'Active' : 'Inactive'}
                       </span>
                     </div>
-                    <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                      position.is_active
-                        ? 'bg-green-100 text-green-800'
-                        : 'bg-gray-100 text-gray-800'
-                    }`}>
-                      {position.is_active ? 'Active' : 'Inactive'}
-                    </span>
+                    <div className="flex items-center gap-1 text-xs text-gray-400">
+                      <CalendarDays className="h-3.5 w-3.5" />
+                      {formatDate(position.created_at)}
+                    </div>
                   </div>
+
                 </div>
               </div>
             ))}
@@ -397,7 +414,6 @@ export default function PositionsPage() {
                     </h3>
                     <div className="space-y-4">
 
-                      {/* Client */}
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">Client *</label>
                         <select
@@ -413,7 +429,6 @@ export default function PositionsPage() {
                         </select>
                       </div>
 
-                      {/* Branch */}
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">Branch (Optional)</label>
                         <select
@@ -430,7 +445,6 @@ export default function PositionsPage() {
                         </select>
                       </div>
 
-                      {/* Title */}
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">Position Title *</label>
                         <input
@@ -443,7 +457,6 @@ export default function PositionsPage() {
                         />
                       </div>
 
-                      {/* Description */}
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
                         <textarea
@@ -455,7 +468,6 @@ export default function PositionsPage() {
                         />
                       </div>
 
-                      {/* Slots */}
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">Number of Slots *</label>
                         <input
@@ -469,7 +481,6 @@ export default function PositionsPage() {
                         />
                       </div>
 
-                      {/* Active */}
                       <div className="flex items-center">
                         <input
                           type="checkbox"

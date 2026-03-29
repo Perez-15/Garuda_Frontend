@@ -1,10 +1,10 @@
-import { useState, useEffect } from 'react';
+ import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, Edit2, Save, X, Loader2, Trash2,
   User, Briefcase, Calendar, Shield, FileText,
   AlertTriangle, ChevronDown, Building2, Plus, LayoutGrid,
-  CheckCircle, Clock, XCircle,
+  CheckCircle, Clock, XCircle, Paperclip, Eye, FileImage,
 } from 'lucide-react';
 import DashboardLayout from '../../../components/layout/DashboardLayout';
 import { employeeService } from '../../../services/hiredService';
@@ -23,7 +23,7 @@ const DOCUMENT_FIELDS = [
   { label: 'Certificate of Employment (COE)', statusKey: 'coe_status',                 expiryKey: null             },
   { label: 'TOR / Diploma',                   statusKey: 'tor_diploma_status',         expiryKey: null             },
   { label: 'Photocopy of Valid ID',           statusKey: 'valid_id_status',            expiryKey: null             },
-  { label: '2pcs 1x1 Picture',               statusKey: 'picture_1x1_status',          expiryKey: null             },
+  { label: '2pcs 1x1 Picture',                statusKey: 'picture_1x1_status',         expiryKey: null             },
 ];
 
 const DOC_STATUS_OPTIONS = [
@@ -86,6 +86,53 @@ function HrTypeBadge({ type }) {
     <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold ${map[type] || 'bg-gray-100 text-gray-600'}`}>
       {labels[type] || type?.toUpperCase()}
     </span>
+  );
+}
+
+// ── File badge ────────────────────────────────────────────────────────────────
+function FileBadge({ name }) {
+  const isPdf = name?.toLowerCase().endsWith('.pdf');
+  return (
+    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium bg-gray-50 text-gray-600 border border-gray-200 max-w-[200px] truncate">
+      {isPdf
+        ? <FileText className="h-3.5 w-3.5 text-red-400 flex-shrink-0" />
+        : <FileImage className="h-3.5 w-3.5 text-blue-400 flex-shrink-0" />}
+      <span className="truncate">{name}</span>
+    </span>
+  );
+}
+
+// ── File input component ──────────────────────────────────────────────────────
+function FileInput({ value, onChange, onClear }) {
+  const inputRef = useRef(null);
+  return (
+    <div>
+      <label className="block text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">
+        Attachment <span className="text-gray-300 normal-case">(PDF, JPG, PNG — max 10MB)</span>
+      </label>
+      {value ? (
+        <div className="flex items-center gap-2">
+          <FileBadge name={value.name} />
+          <button type="button" onClick={onClear}
+            className="text-xs text-red-400 hover:text-red-600 flex items-center gap-1 flex-shrink-0">
+            <X className="h-3 w-3" /> Remove
+          </button>
+        </div>
+      ) : (
+        <button type="button" onClick={() => inputRef.current?.click()}
+          className="flex items-center gap-2 px-3 py-2 text-sm text-gray-500 border border-dashed border-gray-200 rounded-lg hover:border-gray-400 hover:bg-gray-50 transition-colors w-full">
+          <Paperclip className="h-4 w-4" />
+          Click to attach a file
+        </button>
+      )}
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/jpeg,image/png,application/pdf"
+        className="hidden"
+        onChange={(e) => onChange(e.target.files?.[0] || null)}
+      />
+    </div>
   );
 }
 
@@ -243,6 +290,7 @@ export default function EmployeeDetailPage() {
 
   const [showHrModal, setShowHrModal] = useState(false);
   const [hrForm,      setHrForm]      = useState({ type: 'memo', subject: '', description: '', action_date: '', loa_start: '', loa_end: '' });
+  const [hrFile,      setHrFile]      = useState(null); // ← file for Add modal
   const [savingHr,    setSavingHr]    = useState(false);
 
   const [customCols,   setCustomCols]   = useState([]);
@@ -252,6 +300,7 @@ export default function EmployeeDetailPage() {
 
   const [editingHrId,  setEditingHrId]  = useState(null);
   const [editHrForm,   setEditHrForm]   = useState({});
+  const [editHrFile,   setEditHrFile]   = useState(null); // ← file for Edit mode
   const [savingEditHr, setSavingEditHr] = useState(false);
 
   useEffect(() => {
@@ -300,30 +349,23 @@ export default function EmployeeDetailPage() {
 
   const initForm = (emp) => {
     setForm({
-      // Personal
       full_name:                emp.full_name                        || '',
       date_of_birth:            emp.date_of_birth?.substring(0, 10) || '',
       gender:                   emp.gender                           || '',
       civil_status:             emp.civil_status                     || '',
-      // Contact
       contact_number:           emp.contact_number                   || '',
       email:                    emp.email                            || '',
       address:                  emp.address                          || '',
-      // Emergency
       emergency_contact_name:   emp.emergency_contact_name           || '',
       emergency_contact_number: emp.emergency_contact_number         || '',
-      // Government IDs
       sss:                      emp.sss                              || '',
       pagibig:                  emp.pagibig                          || '',
       philhealth:               emp.philhealth                       || '',
       tin:                      emp.tin                              || '',
-      // Overall requirements
       requirements_status:      emp.requirements_status              || 'pending',
-      // All 11 document fields
       ...buildDocFields(emp),
-      // Employment
       branch_id:                emp.branch_id                        || '',
-      position:                 emp.position                         || '',  // plain text
+      position:                 emp.position                         || '',
       date_hired:               emp.date_hired?.substring(0, 10)     || '',
       date_resigned:            emp.date_resigned?.substring(0, 10)  || '',
       date_ended:               emp.date_ended?.substring(0, 10)     || '',
@@ -378,12 +420,18 @@ export default function EmployeeDetailPage() {
     }
   };
 
+  // ── HR Action handlers ────────────────────────────────────────────────────
+
   const handleAddHrAction = async () => {
     try {
       setSavingHr(true);
-      await employeeService.addHrAction(id, hrForm);
+      const fd = new FormData();
+      Object.entries(hrForm).forEach(([k, v]) => { if (v) fd.append(k, v); });
+      if (hrFile) fd.append('file', hrFile);
+      await employeeService.addHrAction(id, fd);
       setShowHrModal(false);
       setHrForm({ type: 'memo', subject: '', description: '', action_date: '', loa_start: '', loa_end: '' });
+      setHrFile(null);
       fetchEmployee();
     } catch (e) {
       console.error(e);
@@ -395,10 +443,11 @@ export default function EmployeeDetailPage() {
 
   const handleEditHrAction = (action) => {
     setEditingHrId(action.id);
+    setEditHrFile(null);
     setEditHrForm({
       type:        action.type,
-      subject:     action.subject        || '',
-      description: action.description   || '',
+      subject:     action.subject                   || '',
+      description: action.description               || '',
       action_date: action.action_date?.substring(0, 10) || '',
       loa_start:   action.loa_start?.substring(0, 10)   || '',
       loa_end:     action.loa_end?.substring(0, 10)     || '',
@@ -408,8 +457,12 @@ export default function EmployeeDetailPage() {
   const handleUpdateHrAction = async (actionId) => {
     try {
       setSavingEditHr(true);
-      await employeeService.updateHrAction(id, actionId, editHrForm);
+      const fd = new FormData();
+      Object.entries(editHrForm).forEach(([k, v]) => { if (v) fd.append(k, v); });
+      if (editHrFile) fd.append('file', editHrFile);
+      await employeeService.updateHrAction(id, actionId, fd);
       setEditingHrId(null);
+      setEditHrFile(null);
       fetchEmployee();
     } catch (e) {
       console.error(e);
@@ -425,6 +478,27 @@ export default function EmployeeDetailPage() {
       await employeeService.deleteHrAction(id, actionId);
       fetchEmployee();
     } catch (e) { console.error(e); }
+  };
+
+  const handleRemoveActionFile = async (actionId) => {
+    if (!confirm('Remove the attached file?')) return;
+    try {
+      const fd = new FormData();
+      fd.append('remove_file', '1');
+      await employeeService.updateHrAction(id, actionId, fd);
+      fetchEmployee();
+    } catch (e) {
+      alert('Failed to remove file.');
+    }
+  };
+
+  const handleViewFile = async (actionId) => {
+    try {
+      const res = await employeeService.getHrActionFileUrl(id, actionId);
+      window.open(res.url, '_blank');
+    } catch (e) {
+      alert('Could not load file.');
+    }
   };
 
   const handleSaveCustomFields = async () => {
@@ -497,7 +571,6 @@ export default function EmployeeDetailPage() {
               <ReqBadge status={employee.requirements_status} />
             </div>
             <div className="flex items-center gap-3 mt-1.5 text-sm text-gray-500 flex-wrap">
-              {/* position is now plain text */}
               {employee.position && (
                 <span className="flex items-center gap-1"><Briefcase className="h-3.5 w-3.5" /> {employee.position}</span>
               )}
@@ -588,8 +661,6 @@ export default function EmployeeDetailPage() {
         ════════════════════════════════════════════════════════════════ */}
         {activeTab === 'personal' && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-
-            {/* Personal Information */}
             <SectionCard title="Personal Information" icon={User} iconColor="text-blue-500">
               {!isEditing ? (
                 <div className="divide-y divide-gray-50">
@@ -634,7 +705,6 @@ export default function EmployeeDetailPage() {
               )}
             </SectionCard>
 
-            {/* Employment Details */}
             <SectionCard title="Employment Details" icon={Briefcase} iconColor="text-indigo-500">
               {!isEditing ? (
                 <div className="divide-y divide-gray-50">
@@ -687,7 +757,6 @@ export default function EmployeeDetailPage() {
               )}
             </SectionCard>
 
-            {/* Government IDs */}
             <SectionCard title="Government IDs" icon={FileText} iconColor="text-amber-500">
               {!isEditing ? (
                 <div className="divide-y divide-gray-50">
@@ -706,7 +775,6 @@ export default function EmployeeDetailPage() {
               )}
             </SectionCard>
 
-            {/* Documents & Requirements */}
             <SectionCard
               title="Documents & Requirements"
               icon={Shield}
@@ -725,7 +793,6 @@ export default function EmployeeDetailPage() {
                 : <DocumentsEdit form={form} handleChange={handleChange} />
               }
             </SectionCard>
-
           </div>
         )}
 
@@ -757,7 +824,7 @@ export default function EmployeeDetailPage() {
                       ))}
                     </select>
                   </div>
-                  <Field label="Position" name="position" value={form.position} onChange={handleChange} placeholder="e.g. Service Crew, Cashier..." />
+                  <Field label="Position"      name="position"      value={form.position}      onChange={handleChange} placeholder="e.g. Service Crew, Cashier..." />
                   <Field label="Date Hired"    name="date_hired"    type="date"   value={form.date_hired}    onChange={handleChange} required />
                   <Field label="Daily Rate"    name="daily_rate"    type="number" value={form.daily_rate}    onChange={handleChange} placeholder="0.00" />
                   <Field label="Date Resigned" name="date_resigned" type="date"   value={form.date_resigned} onChange={handleChange} />
@@ -907,9 +974,42 @@ export default function EmployeeDetailPage() {
                                 onChange={(e) => setEditHrForm((f) => ({ ...f, loa_end: e.target.value }))} />
                             </>
                           )}
+
+                          {/* ── File upload in edit mode ── */}
+                          <div className="col-span-2">
+                            <FileInput
+                              value={editHrFile}
+                              onChange={setEditHrFile}
+                              onClear={() => setEditHrFile(null)}
+                            />
+                            {/* Show existing file if no new file selected */}
+                              {!editHrFile && action.file_path && (
+                                <div className="flex items-center gap-2 mt-2 flex-wrap">
+                                  <span className="text-xs text-gray-400">Current:</span>
+                                  <FileBadge name={action.file_name} />
+                                  {/* View button */}
+                                  {action.file_url && (
+                                    <button
+                                      type="button"
+                                      onClick={() => window.open(action.file_url, '_blank')}
+                                      className="text-xs text-indigo-500 hover:text-indigo-700 flex items-center gap-1">
+                                      <Eye className="h-3.5 w-3.5" /> View
+                                    </button>
+                                  )}
+                                  {/* Remove existing file */}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRemoveActionFile(action.id)}
+                                    className="text-xs text-red-400 hover:text-red-600 flex items-center gap-1">
+                                    <X className="h-3.5 w-3.5" /> Remove
+                                  </button>
+                                </div>
+                              )}
+                          </div>
                         </div>
+
                         <div className="flex items-center justify-end gap-2 pt-1 border-t border-gray-50">
-                          <button onClick={() => setEditingHrId(null)}
+                          <button onClick={() => { setEditingHrId(null); setEditHrFile(null); }}
                             className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">
                             <X className="h-3.5 w-3.5" /> Cancel
                           </button>
@@ -938,6 +1038,33 @@ export default function EmployeeDetailPage() {
                                 <span className="flex items-center gap-1"><User className="h-3 w-3" /> {action.created_by.name}</span>
                               )}
                             </div>
+
+                           {/* ── Attached file ── */}
+                            {action.file_path && (
+                              <div className="mt-2 space-y-2">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <FileBadge name={action.file_name} />
+                                  <button onClick={() => window.open(action.file_url, '_blank')}
+                                    className="text-xs text-indigo-500 hover:text-indigo-700 flex items-center gap-1">
+                                    <Eye className="h-3.5 w-3.5" /> View
+                                  </button>
+                                  <button onClick={() => handleRemoveActionFile(action.id)}
+                                    className="text-xs text-red-400 hover:text-red-600 flex items-center gap-1">
+                                    <X className="h-3.5 w-3.5" /> Remove
+                                  </button>
+                                </div>
+
+                                {/* Inline image preview — only for jpg/png */}
+                                {action.file_url && !action.file_name?.toLowerCase().endsWith('.pdf') && (
+                                  <img
+                                    src={action.file_url}
+                                    alt={action.file_name}
+                                    className="mt-1 rounded-lg border border-gray-100 max-h-48 max-w-xs object-contain cursor-pointer hover:opacity-90 transition-opacity"
+                                    onClick={() => window.open(action.file_url, '_blank')}
+                                  />
+                                )}
+                              </div>
+                            )}
                           </div>
                         </div>
                         <div className="flex items-center gap-1 flex-shrink-0">
@@ -952,7 +1079,6 @@ export default function EmployeeDetailPage() {
                         </div>
                       </div>
                     )}
-
                   </div>
                 ))}
               </div>
@@ -1023,10 +1149,11 @@ export default function EmployeeDetailPage() {
           <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="text-base font-semibold text-gray-900">Add HR Action</h3>
-              <button onClick={() => setShowHrModal(false)} className="text-gray-400 hover:text-gray-600">
+              <button onClick={() => { setShowHrModal(false); setHrFile(null); }} className="text-gray-400 hover:text-gray-600">
                 <X className="h-5 w-5" />
               </button>
             </div>
+
             <div className="flex items-center gap-2">
               {[
                 { value: 'memo', label: 'Memo',            cls: 'bg-blue-100 text-blue-700'     },
@@ -1040,6 +1167,7 @@ export default function EmployeeDetailPage() {
                 </button>
               ))}
             </div>
+
             <div className="space-y-3">
               <Field label="Subject" name="subject" value={hrForm.subject}
                 onChange={(e) => setHrForm((f) => ({ ...f, subject: e.target.value }))} />
@@ -1060,9 +1188,17 @@ export default function EmployeeDetailPage() {
                     onChange={(e) => setHrForm((f) => ({ ...f, loa_end: e.target.value }))} />
                 </div>
               )}
+
+              {/* ── File upload in modal ── */}
+              <FileInput
+                value={hrFile}
+                onChange={setHrFile}
+                onClear={() => setHrFile(null)}
+              />
             </div>
+
             <div className="flex justify-end gap-2 pt-2">
-              <button onClick={() => setShowHrModal(false)}
+              <button onClick={() => { setShowHrModal(false); setHrFile(null); }}
                 className="px-4 py-2 text-sm font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">
                 Cancel
               </button>

@@ -32,7 +32,7 @@ export const employeeService = {
   /**
    * Convert an existing applicant record into an employee.
    * @param {number} applicantId
-   * @param {{ position_id?, date_hired, daily_rate?, remarks? }} data
+   * @param {{ position?, date_hired, daily_rate?, remarks? }} data
    */
   convertFromApplicant: async (applicantId, data) => {
     const response = await apiClient.post(`/employees/convert/${applicantId}`, data);
@@ -56,34 +56,81 @@ export const employeeService = {
     return response.data;
   },
 
-  updateHrAction: async (employeeId, actionId, data) => {
-  const response = await apiClient.patch(
-    `/employees/${employeeId}/hr-actions/${actionId}`, data
-  );
-  return response.data;
-},
-
-  // ── Delete ──────────────────────────────────────────────────────────────────
+  // ── Delete (soft) ───────────────────────────────────────────────────────────
 
   delete: async (id) => {
     const response = await apiClient.delete(`/employees/${id}`);
     return response.data;
   },
 
-  // ── HR Actions (Memo / IR / LOA) ────────────────────────────────────────────
+  // ── Trash ───────────────────────────────────────────────────────────────────
 
-  getHrActions: async (employeeId, params = {}) => {
-    const response = await apiClient.get(`/employees/${employeeId}/hr-actions`, { params });
+  /**
+   * Get all soft-deleted employees (admin only).
+   */
+  getTrashed: async (params = {}) => {
+    const response = await apiClient.get('/employees/trashed', { params });
     return response.data;
   },
 
-  addHrAction: async (employeeId, data) => {
-    const response = await apiClient.post(`/employees/${employeeId}/hr-actions`, data);
+  /**
+   * Restore a soft-deleted employee record only.
+   * (Applicant restore handles the linked employee via Option A logic)
+   */
+  restore: async (id) => {
+    const response = await apiClient.patch(`/employees/${id}/restore`);
     return response.data;
   },
 
-  deleteHrAction: async (employeeId, actionId) => {
-    const response = await apiClient.delete(`/employees/${employeeId}/hr-actions/${actionId}`);
+  /**
+   * Permanently delete a soft-deleted employee.
+   */
+  forceDelete: async (id) => {
+    const response = await apiClient.delete(`/employees/${id}/force-delete`);
     return response.data;
   },
+
+// ── HR Actions (Memo / IR / LOA) ────────────────────────────────────────────
+
+getHrActions: async (employeeId, params = {}) => {
+  const response = await apiClient.get(`/employees/${employeeId}/hr-actions`, { params });
+  return response.data;
+},
+
+addHrAction: async (employeeId, formData) => {
+  const response = await apiClient.post(
+    `/employees/${employeeId}/hr-actions`,
+    formData,
+    {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }
+  );
+  return response.data;
+},
+
+updateHrAction: async (employeeId, actionId, formData) => {
+  const response = await apiClient.post(
+    `/employees/${employeeId}/hr-actions/${actionId}`,
+    formData,
+    {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      params: { _method: 'PATCH' },
+    }
+  );
+  return response.data;
+},
+
+deleteHrAction: async (employeeId, actionId) => {
+  const response = await apiClient.delete(
+    `/employees/${employeeId}/hr-actions/${actionId}`
+  );
+  return response.data;
+},
+
+getHrActionFileUrl: async (employeeId, actionId) => {
+  const response = await apiClient.get(
+    `/employees/${employeeId}/hr-actions/${actionId}/file-url`
+  );
+  return response.data;
+},
 };
