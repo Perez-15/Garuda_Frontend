@@ -42,6 +42,9 @@ import PerformancePage from './pages/Performance/Performancepage';
 // Recently Deleted
 import RecentlyDeletedPage from './pages/RecentelyDeleted/Recentlydeletedpage';
 
+// Website Applications (from marketing site)
+import WebsiteApplicationsPage from './pages/Marketing/WebsiteApplicationsPage';
+
 
 function App() {
   return (
@@ -101,9 +104,11 @@ function App() {
           {/* ── Performance ────────────────────────────────────────────────── */}
           <Route path="/performance" element={<ProtectedRoute><PerformancePage /></ProtectedRoute>} />
 
-          
           {/* ── Recently Deleted (Admin only) ──────────────────────────────── */}
           <Route path="/recently-deleted" element={<ProtectedRoute><RecentlyDeletedPage /></ProtectedRoute>} />
+
+          {/* ── Website Applications (from marketing site) ─────────────────── */}
+          <Route path="/website-applications" element={<ProtectedRoute><WebsiteApplicationsPage /></ProtectedRoute>} />
 
           {/* ── Fallbacks ──────────────────────────────────────────────────── */}
           <Route path="/"  element={<Navigate to="/dashboard" replace />} />

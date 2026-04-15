@@ -10,6 +10,7 @@ import DashboardLayout from '../../components/layout/DashboardLayout';
 import { performanceService } from '../../services/performanceService';
 import { useAuth } from '../../contexts/AuthContext';
 
+
 const DATE_FILTERS = [
   { key: '',           label: 'All Time'   },
   { key: 'today',      label: 'Today'      },
@@ -25,17 +26,17 @@ const MODAL_TABS = [
 ];
 
 const TAB_COLORS = {
-  blue:  { active: 'border-blue-500 text-blue-600 bg-blue-50',  badge: 'bg-blue-100 text-blue-700'  },
+  blue:  { active: 'border-blue-500 text-blue-600 bg-blue-50',    badge: 'bg-blue-100 text-blue-700'   },
   green: { active: 'border-green-500 text-green-600 bg-green-50', badge: 'bg-green-100 text-green-700' },
   amber: { active: 'border-amber-500 text-amber-600 bg-amber-50', badge: 'bg-amber-100 text-amber-700' },
-  rose:  { active: 'border-rose-500 text-rose-600 bg-rose-50',  badge: 'bg-rose-100 text-rose-700'  },
+  rose:  { active: 'border-rose-500 text-rose-600 bg-rose-50',    badge: 'bg-rose-100 text-rose-700'   },
 };
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 function BackOutBadge({ value }) {
   if (value === 0) return <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-green-100 text-green-700">✓ None</span>;
   if (value <= 2)  return <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-700"><UserX className="h-3 w-3" />{value}</span>;
-  return <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-red-100 text-red-700"><UserX className="h-3 w-3" />{value}</span>;
+  return               <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-red-100 text-red-700"><UserX className="h-3 w-3" />{value}</span>;
 }
 
 function Avatar({ name, photo }) {
@@ -87,21 +88,21 @@ function TAModal({ ta, onClose }) {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('in_process');
   const [data, setData]           = useState([]);
-  const [type, setType]           = useState('applicants'); // 'applicants' | 'employees'
+  const [type, setType]           = useState('applicants');
   const [loading, setLoading]     = useState(false);
 
-useEffect(() => {
-  if (!ta) return;
-  setLoading(true);
-  performanceService
-    .getTAApplicants(ta.id, { status: activeTab })
-    .then(res => {
-      setData(res.data || []);
-      setType(res.type || 'applicants');
-    })
-    .catch(console.error)
-    .finally(() => setLoading(false));
-}, [ta, activeTab]);
+  useEffect(() => {
+    if (!ta) return;
+    setLoading(true);
+    performanceService
+      .getTAApplicants(ta.id, { status: activeTab })
+      .then(res => {
+        setData(res.data || []);
+        setType(res.type || 'applicants');
+      })
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, [ta, activeTab]);
 
   if (!ta) return null;
 
@@ -126,7 +127,9 @@ useEffect(() => {
           <Avatar name={ta.name} photo={ta.avatar} />
           <div className="flex-1 min-w-0">
             <h2 className="text-base font-semibold text-gray-900 truncate">{ta.name}</h2>
-            <p className="text-xs text-gray-400">Talent Acquisition · {tabCounts[activeTab]} {MODAL_TABS.find(t => t.key === activeTab)?.label}</p>
+            <p className="text-xs text-gray-400">
+              Talent Acquisition · {tabCounts[activeTab]} {MODAL_TABS.find(t => t.key === activeTab)?.label}
+            </p>
           </div>
           <button onClick={onClose} className="p-2 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition">
             <X className="h-4 w-4" />
@@ -159,15 +162,17 @@ useEffect(() => {
         {!loading && data.length > 0 && (
           <div className="flex-shrink-0 px-6 py-2 bg-gray-50 border-b border-gray-100">
             {type === 'employees' ? (
+              // cols: 3 + 2 + 2 + 2 + 2 + 1 = 12
               <div className="grid grid-cols-12 text-xs font-medium text-gray-400 uppercase tracking-wider">
                 <div className="col-span-3">Employee</div>
                 <div className="col-span-2">Position</div>
                 <div className="col-span-2">Branch</div>
                 <div className="col-span-2">Date Hired</div>
-               <div className="col-span-2">Req. Status</div>
+                <div className="col-span-2">Req. Status</div>
                 <div className="col-span-1"></div>
               </div>
             ) : (
+              // cols: 3 + 3 + 2 + 3 + 1 = 12
               <div className="grid grid-cols-12 text-xs font-medium text-gray-400 uppercase tracking-wider">
                 <div className="col-span-3">Applicant</div>
                 <div className="col-span-3">Branch</div>
@@ -191,11 +196,11 @@ useEffect(() => {
               <p className="text-sm">No records in this status.</p>
             </div>
           ) : type === 'employees' ? (
-            // ── Deployed (employees) rows ──
+            // cols: 3 + 2 + 2 + 2 + 2 + 1 = 12
             data.map(emp => (
               <div key={emp.id} className="grid grid-cols-12 items-center px-6 py-3 hover:bg-gray-50 transition gap-2">
                 <div className="col-span-3 min-w-0">
-                 <p className="text-sm font-medium text-gray-900 truncate">{emp.full_name}</p>
+                  <p className="text-sm font-medium text-gray-900 truncate">{emp.full_name}</p>
                   <p className="text-xs text-gray-400 truncate">{emp.employment_status ?? 'Active'}</p>
                 </div>
                 <div className="col-span-2 min-w-0">
@@ -211,18 +216,15 @@ useEffect(() => {
                       : '—'}
                   </p>
                 </div>
-              <div className="col-span-2">
-  {(() => {
-    const s = emp.requirements_status;
-    if (s === 'complete')
-      return <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-green-100 text-green-700">Complete</span>;
-    if (s === 'incomplete')
-      return <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-red-100 text-red-600">Incomplete</span>;
-    if (s === 'pending')
-      return <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-amber-100 text-amber-700">Pending</span>;
-    return <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-gray-100 text-gray-500">—</span>;
-  })()}
-</div>
+                <div className="col-span-2">
+                  {(() => {
+                    const s = emp.requirements_status;
+                    if (s === 'complete')   return <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-green-100 text-green-700">Complete</span>;
+                    if (s === 'incomplete') return <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-red-100 text-red-600">Incomplete</span>;
+                    if (s === 'pending')    return <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-amber-100 text-amber-700">Pending</span>;
+                    return <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-gray-100 text-gray-500">—</span>;
+                  })()}
+                </div>
                 <div className="col-span-1 flex justify-end">
                   <button
                     onClick={() => { onClose(); navigate(`/employees/${emp.id}`); }}
@@ -235,26 +237,26 @@ useEffect(() => {
               </div>
             ))
           ) : (
-            // ── In-Process / Pooling / Back Out (applicants) rows ──
+            // cols: 3 + 3 + 2 + 3 + 1 = 12
             data.map(applicant => (
               <div key={applicant.id} className="grid grid-cols-12 items-center px-6 py-3 hover:bg-gray-50 transition gap-2">
                 <div className="col-span-3 min-w-0">
-                 <p className="text-sm font-medium text-gray-900 truncate">{applicant.full_name}</p>
+                  <p className="text-sm font-medium text-gray-900 truncate">{applicant.full_name}</p>
                 </div>
                 <div className="col-span-3 min-w-0">
                   <p className="text-xs text-gray-600 truncate">{applicant.branch?.branch_name ?? '—'}</p>
                 </div>
                 <div className="col-span-2 min-w-0">
-                 <span className="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full font-medium">
-  {applicant.current_step?.step_name ?? '—'}
-</span>
+                  <span className="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full font-medium">
+                    {applicant.current_step?.step_name ?? '—'}
+                  </span>
                 </div>
                 <div className="col-span-3 min-w-0">
                   <p className="text-xs text-gray-500 truncate">{applicant.source ?? '—'}</p>
                 </div>
                 <div className="col-span-1 flex justify-end">
                   <button
-                  onClick={() => { onClose(); navigate(`/applicants/${applicant.id}`); }}
+                    onClick={() => { onClose(); navigate(`/applicants/${applicant.id}`); }}
                     className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-blue-600 transition"
                     title="View applicant"
                   >
@@ -288,7 +290,7 @@ export default function PerformancePage() {
   const [loadingTA,     setLoadingTA]     = useState(false);
   const [loadingBranch, setLoadingBranch] = useState(false);
   const [lastRefreshed, setLastRefreshed] = useState(null);
-  const [selectedTA,    setSelectedTA]    = useState(null); // controls modal
+  const [selectedTA,    setSelectedTA]    = useState(null);
 
   const fetchTA = useCallback(async () => {
     try {
@@ -392,7 +394,7 @@ export default function PerformancePage() {
           <SummaryCard label="Incomplete Docs"           value={totalIncomplete} icon={AlertTriangle} color="red"   />
         </div>
 
-        {/* Tabs */}
+        {/* View Tabs */}
         <div className="flex items-center gap-1 bg-white rounded-xl border border-gray-100 shadow-sm p-1 w-fit">
           <button
             onClick={() => setActiveTab('ta')}
@@ -412,7 +414,7 @@ export default function PerformancePage() {
           </button>
         </div>
 
-        {/* TA Performance Tab */}
+        {/* ── TA Performance Tab ── */}
         {activeTab === 'ta' && (
           <div className="bg-white shadow rounded-xl overflow-hidden">
             <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
@@ -435,11 +437,13 @@ export default function PerformancePage() {
               </div>
             ) : (
               <>
+                {/* TA Table Header — 1+3+2+1+1+1+2+1 = 12 */}
                 <div className="hidden md:grid grid-cols-12 px-6 py-2 bg-gray-50 text-xs font-medium text-gray-500 uppercase tracking-wider border-b border-gray-100">
                   <div className="col-span-1 text-center">Rank</div>
                   <div className="col-span-3">Recruiter</div>
-                  <div className="col-span-2 text-center">In-Process</div>
-                  <div className="col-span-2 text-center text-green-700 font-bold">Deployed</div>
+                  <div className="col-span-2">Client</div>
+                  <div className="col-span-1 text-center">In-Process</div>
+                  <div className="col-span-1 text-center text-green-700 font-bold">Deployed</div>
                   <div className="col-span-1 text-center text-amber-700 font-bold">Pooling</div>
                   <div className="col-span-2 text-center text-rose-600 font-bold">Back Outs</div>
                   <div className="col-span-1 text-center">View</div>
@@ -447,11 +451,17 @@ export default function PerformancePage() {
 
                 <div className="divide-y divide-gray-50">
                   {taData.map((ta, index) => (
+                    // Row — 1+3+2+1+1+1+2+1 = 12
                     <div
                       key={ta.id}
                       className={`grid grid-cols-12 items-center px-6 py-4 hover:bg-gray-50 transition-colors ${index === 0 ? 'bg-green-50/40' : ''}`}
                     >
-                      <div className="col-span-1 flex justify-center"><Rank index={index} /></div>
+                      {/* Rank */}
+                      <div className="col-span-1 flex justify-center">
+                        <Rank index={index} />
+                      </div>
+
+                      {/* Recruiter */}
                       <div className="col-span-3 flex items-center gap-3">
                         <Avatar name={ta.name} photo={ta.avatar} />
                         <div className="min-w-0">
@@ -459,20 +469,44 @@ export default function PerformancePage() {
                           <p className="text-xs text-gray-400">{ta.total ?? 0} total</p>
                         </div>
                       </div>
-                      <div className="col-span-2 text-center">
+
+                      {/* Client */}
+                      <div className="col-span-2 min-w-0">
+                        {ta.clients?.length > 0 ? (
+                          <div className="flex flex-wrap gap-1">
+                            {ta.clients.map((c, i) => (
+                              <span key={i} className="text-xs bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full font-medium truncate max-w-full">
+                                {c}
+                              </span>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="text-xs text-gray-400">—</span>
+                        )}
+                      </div>
+
+                      {/* In-Process */}
+                      <div className="col-span-1 text-center">
                         <span className="text-sm font-bold text-blue-600">{ta.in_process ?? 0}</span>
                       </div>
-                      <div className="col-span-2 text-center">
+
+                      {/* Deployed */}
+                      <div className="col-span-1 text-center">
                         <span className="inline-block text-sm font-black text-green-600 bg-green-50 px-3 py-1 rounded-lg">{ta.deployed ?? 0}</span>
                         <MiniProgress value={((ta.deployed ?? 0) / maxDeployed) * 100} color="green" />
                       </div>
+
+                      {/* Pooling */}
                       <div className="col-span-1 text-center">
                         <span className="text-sm font-bold text-amber-600">{ta.pooling ?? 0}</span>
                       </div>
+
+                      {/* Back Outs */}
                       <div className="col-span-2 flex justify-center">
                         <BackOutBadge value={ta.backouts ?? 0} />
                       </div>
-                      {/* View Button */}
+
+                      {/* View */}
                       <div className="col-span-1 flex justify-center">
                         <button
                           onClick={() => setSelectedTA(ta)}
@@ -489,7 +523,7 @@ export default function PerformancePage() {
           </div>
         )}
 
-        {/* Branch Performance Tab — unchanged */}
+        {/* ── Branch Performance Tab ── */}
         {activeTab === 'branch' && (
           <div className="bg-white shadow rounded-xl overflow-hidden">
             <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
@@ -509,6 +543,7 @@ export default function PerformancePage() {
               </div>
             ) : (
               <>
+                {/* Branch Table Header — 4+2+2+2+2 = 12 */}
                 <div className="hidden md:grid grid-cols-12 px-6 py-2 bg-gray-50 text-xs font-medium text-gray-500 uppercase tracking-wider border-b border-gray-100">
                   <div className="col-span-4">Branch</div>
                   <div className="col-span-2 text-center">Client</div>
@@ -516,10 +551,12 @@ export default function PerformancePage() {
                   <div className="col-span-2 text-center">In-Process</div>
                   <div className="col-span-2 text-center text-red-600 font-bold">Incomplete Docs</div>
                 </div>
+
                 <div className="divide-y divide-gray-50">
                   {branchData.map(branch => {
                     const hasBlocker = branch.incomplete_docs > 0;
                     return (
+                      // Row — 4+2+2+2+2 = 12
                       <div key={branch.id} className={`grid grid-cols-12 items-center px-6 py-4 hover:bg-gray-50 transition-colors ${hasBlocker ? 'border-l-4 border-red-400' : 'border-l-4 border-transparent'}`}>
                         <div className="col-span-4 flex items-center gap-3">
                           <div className={`h-9 w-9 rounded-lg flex items-center justify-center flex-shrink-0 ${hasBlocker ? 'bg-red-100' : 'bg-blue-100'}`}>
@@ -553,6 +590,7 @@ export default function PerformancePage() {
                     );
                   })}
                 </div>
+
                 <div className="px-6 py-3 bg-gray-50 border-t border-gray-100 flex flex-wrap gap-4 text-xs text-gray-400">
                   <span className="flex items-center gap-1"><span className="inline-block w-2 h-4 bg-red-400 rounded-sm" /> Branch has incomplete/pending employee documents</span>
                   <span>⚠ Incomplete Docs = employees with missing NBI, medical, or other requirements</span>

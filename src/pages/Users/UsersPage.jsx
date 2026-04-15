@@ -165,16 +165,16 @@ export default function UsersPage() {
     setShowModal(true);
   };
 
-  const handleDelete = async (id) => {
-    if (!confirm('Are you sure you want to delete this user?')) return;
-    try {
-      await userService.delete(id);
-      fetchUsers();
-    } catch (error) {
-      console.error('Error deleting user:', error);
-      alert(error.response?.data?.message || 'Failed to delete user');
-    }
-  };
+const handleDelete = async (user) => {   // pass full user object now
+  if (!confirm(`Delete "${user.name}"? This cannot be undone.`)) return;
+  try {
+    await userService.delete(user.id);
+    fetchUsers();
+  } catch (error) {
+    console.error('Error deleting user:', error);
+    alert(error.response?.data?.message || 'Failed to delete user');
+  }
+};
 
   const handleToggleStatus = async (user) => {
     try {
@@ -308,7 +308,7 @@ export default function UsersPage() {
 
                     // FIX 4: HR Admin cannot edit/delete super_admin or other hr_admin accounts
                     const canEditThis   = isSuperAdmin || (!isSuperAdminUser && !isHrAdminUser);
-                    const canDeleteThis = isSuperAdmin && !isSuperAdminUser;
+                    const canDeleteThis = canManage && !isSuperAdminUser && !isCurrentUser;
                     const canToggleThis = canManage && !isSuperAdminUser && !isCurrentUser;
 
                     return (
@@ -375,39 +375,47 @@ export default function UsersPage() {
                           </span>
                         </td>
                         {canManage && (
-                          <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
-                            <button
-                              onClick={() => handleEdit(user)}
-                              disabled={!canEditThis}
-                              title={!canEditThis ? 'You cannot edit this account' : 'Edit'}
-                              className="text-blue-600 hover:text-blue-900 disabled:opacity-30"
-                            >
-                              <Edit className="h-4 w-4 inline" />
-                            </button>
-                            <button
-                              onClick={() => handleToggleStatus(user)}
-                              disabled={!canToggleThis}
-                              title={
-                                isCurrentUser    ? 'Cannot deactivate yourself'      :
-                                isSuperAdminUser ? 'Cannot deactivate Super Admin'   : ''
-                              }
-                              className={`${user.is_active ? 'text-orange-600' : 'text-green-600'} hover:opacity-80 disabled:opacity-30`}
-                            >
-                              {user.is_active
-                                ? <UserX className="h-4 w-4 inline" />
-                                : <UserCheck className="h-4 w-4 inline" />
-                              }
-                            </button>
-                            {canDeleteThis && (
-                              <button
-                                onClick={() => handleDelete(user.id)}
-                                className="text-red-600 hover:text-red-900"
-                              >
-                                <Trash2 className="h-4 w-4 inline" />
-                              </button>
-                            )}
-                          </td>
-                        )}
+  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
+    
+    {/* Edit */}
+    <button
+      onClick={() => handleEdit(user)}
+      disabled={!canEditThis}
+      title={!canEditThis ? 'You cannot edit this account' : 'Edit'}
+      className="text-blue-600 hover:text-blue-900 disabled:opacity-30"
+    >
+      <Edit className="h-4 w-4 inline" />
+    </button>
+
+    {/* Toggle active/inactive */}
+    <button
+      onClick={() => handleToggleStatus(user)}
+      disabled={!canToggleThis}
+      title={
+        isCurrentUser    ? 'Cannot deactivate yourself'    :
+        isSuperAdminUser ? 'Cannot deactivate Super Admin' : ''
+      }
+      className={`${user.is_active ? 'text-orange-600' : 'text-green-600'} hover:opacity-80 disabled:opacity-30`}
+    >
+      {user.is_active
+        ? <UserX    className="h-4 w-4 inline" />
+        : <UserCheck className="h-4 w-4 inline" />
+      }
+    </button>
+
+    {/* Delete — visible to both super_admin and hr_admin, never on self or another super_admin */}
+    {canDeleteThis && (
+      <button
+        onClick={() => handleDelete(user)} 
+        title="Delete user"
+        className="text-red-600 hover:text-red-900"
+      >
+        <Trash2 className="h-4 w-4 inline" />
+      </button>
+    )}
+
+  </td>
+)}
                       </tr>
                     );
                   })}

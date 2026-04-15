@@ -1,4 +1,4 @@
-// pages/Internal/InternalEmployeesPage.jsx
+
 import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import {
@@ -13,6 +13,7 @@ import { customColumnService } from '../../services/customcolumnService';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { usePersistedColumns } from '../../hooks/usePersistedColumns';
+import ManageColumnsModal from '../../components/Modal/ManageColumnsModal';
 
 const PAGE = 'internal_employees';
 
@@ -331,142 +332,6 @@ function UserModal({ onClose, onSaved, canManage }) {
   );
 }
 
-// ── Manage Columns Modal ──────────────────────────────────────────────────────
-function ManageColumnsModal({ customCols, onClose, onRefresh }) {
-  const [cols, setCols]           = useState(customCols.map((c) => ({ ...c })));
-  const [newLabel, setNewLabel]   = useState('');
-  const [newType, setNewType]     = useState('text');
-  const [editingId, setEditingId] = useState(null);
-  const [editLabel, setEditLabel] = useState('');
-  const [saving, setSaving]       = useState(false);
-  const [error, setError]         = useState('');
-
-  const handleAdd = async () => {
-    const trimmed = newLabel.trim();
-    if (!trimmed) { setError('Column name is required.'); return; }
-    const field_key = trimmed.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
-    if (!field_key) { setError('Invalid column name.'); return; }
-    try {
-      setSaving(true);
-      const res = await customColumnService.create({ page: PAGE, field_key, label: trimmed, type: newType, order: cols.length });
-      if (res.column) { setCols((p) => [...p, res.column]); setNewLabel(''); setNewType('text'); setError(''); }
-      else setError(res.message || 'Failed.');
-    } catch { setError('Server error.'); }
-    finally { setSaving(false); }
-  };
-
-  const handleRename = async (col) => {
-    const trimmed = editLabel.trim();
-    if (!trimmed) { setError('Required.'); return; }
-    try {
-      setSaving(true);
-      await customColumnService.update(col.id, { label: trimmed });
-      setCols((p) => p.map((c) => c.id === col.id ? { ...c, label: trimmed } : c));
-      setEditingId(null); setError('');
-    } catch { setError('Failed.'); }
-    finally { setSaving(false); }
-  };
-
-  const handleDelete = async (col) => {
-    if (!confirm(`Delete "${col.label}"?`)) return;
-    try { await customColumnService.remove(col.id); setCols((p) => p.filter((c) => c.id !== col.id)); }
-    catch { setError('Failed.'); }
-  };
-
-  const move = async (index, dir) => {
-    const next = [...cols]; const target = index + dir;
-    if (target < 0 || target >= next.length) return;
-    [next[index], next[target]] = [next[target], next[index]];
-    setCols(next);
-    await customColumnService.reorder(PAGE, next.map((c) => c.id));
-  };
-
-  const handleDone = () => { onRefresh(); onClose(); };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" onClick={handleDone} />
-      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col max-h-[85vh]">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-          <div>
-            <h3 className="text-base font-semibold text-gray-900">Manage Table Columns</h3>
-            <p className="text-xs text-gray-400 mt-0.5">Changes here apply to <span className="font-semibold text-gray-600">all users</span></p>
-          </div>
-          <button onClick={handleDone} className="text-gray-400 hover:text-gray-600"><X className="h-5 w-5" /></button>
-        </div>
-        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-2">
-          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">Default Columns</p>
-          {FIXED_COLUMNS.map((col) => (
-            <div key={col.key} className="flex items-center gap-2 p-2.5 rounded-lg border border-gray-100 bg-gray-50">
-              <GripVertical className="h-4 w-4 text-gray-200 flex-shrink-0" />
-              <span className="flex-1 text-sm text-gray-500">{col.label}</span>
-              <span className="text-xs text-gray-300 bg-gray-100 px-2 py-0.5 rounded">fixed</span>
-            </div>
-          ))}
-          {cols.length > 0 && (
-            <>
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mt-4 mb-1">Custom Columns</p>
-              {cols.map((col, index) => (
-                <div key={col.id} className="flex items-center gap-2 p-2.5 rounded-lg border border-blue-100 bg-blue-50 group">
-                  <div className="flex flex-col gap-0.5">
-                    <button onClick={() => move(index, -1)} disabled={index === 0} className="text-gray-300 hover:text-gray-600 disabled:opacity-20"><ChevronUp className="h-3 w-3" /></button>
-                    <button onClick={() => move(index, 1)} disabled={index === cols.length - 1} className="text-gray-300 hover:text-gray-600 disabled:opacity-20"><ChevronDown className="h-3 w-3" /></button>
-                  </div>
-                  <GripVertical className="h-4 w-4 text-blue-200 flex-shrink-0" />
-                  {editingId === col.id ? (
-                    <input autoFocus value={editLabel} onChange={(e) => setEditLabel(e.target.value)}
-                      onKeyDown={(e) => { if (e.key === 'Enter') handleRename(col); if (e.key === 'Escape') setEditingId(null); }}
-                      className="flex-1 px-2 py-1 text-sm border border-blue-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                  ) : (
-                    <span className="flex-1 text-sm text-gray-700">{col.label} <span className="text-xs text-blue-400">({col.type})</span></span>
-                  )}
-                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    {editingId === col.id ? (
-                      <>
-                        <button onClick={() => handleRename(col)} disabled={saving} className="p-1 text-green-600 hover:bg-green-50 rounded"><Save className="h-3.5 w-3.5" /></button>
-                        <button onClick={() => setEditingId(null)} className="p-1 text-gray-400 hover:bg-gray-100 rounded"><X className="h-3.5 w-3.5" /></button>
-                      </>
-                    ) : (
-                      <>
-                        <button onClick={() => { setEditingId(col.id); setEditLabel(col.label); setError(''); }} className="p-1 text-blue-500 hover:bg-blue-100 rounded"><Edit2 className="h-3.5 w-3.5" /></button>
-                        <button onClick={() => handleDelete(col)} className="p-1 text-red-400 hover:bg-red-50 rounded"><Trash2 className="h-3.5 w-3.5" /></button>
-                      </>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </>
-          )}
-        </div>
-        <div className="px-6 py-4 border-t border-gray-100 space-y-3">
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Add New Column</p>
-          <div className="flex gap-2">
-            <input value={newLabel} onChange={(e) => { setNewLabel(e.target.value); setError(''); }}
-              onKeyDown={(e) => { if (e.key === 'Enter') handleAdd(); }}
-              placeholder="e.g. Emergency Contact, Notes..."
-              className="flex-1 px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
-            <select value={newType} onChange={(e) => setNewType(e.target.value)}
-              className="px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
-              <option value="text">Text</option>
-              <option value="number">Number</option>
-              <option value="date">Date</option>
-            </select>
-          </div>
-          <button onClick={handleAdd} disabled={saving}
-            className="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-medium text-white bg-gray-900 rounded-lg hover:bg-gray-800 disabled:opacity-50 transition-colors">
-            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-            Add Column to Database
-          </button>
-          {error && <p className="text-xs text-red-500">{error}</p>}
-        </div>
-        <div className="flex justify-end px-6 py-4 border-t border-gray-100">
-          <button onClick={handleDone} className="px-5 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors">Done</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 // Main Page
 // ─────────────────────────────────────────────────────────────────────────────
@@ -543,12 +408,10 @@ export default function InternalEmployeesPage() {
     ...customCols.map((c) => ({ key: `custom_${c.field_key}`, label: c.label, always: false, fixed: false, custom: true })),
   ];
 
-  // ── Column toggle (uses hook) ─────────────────────────────────────────────
   const toggleColumn = (key) => _toggleColumn(key, allColumnsWithCustom);
 
   const activeColumns = colOrder.filter((k) => visibleCols.includes(k));
 
-  // ── Drag handlers — saves new order via hook's setColOrder ────────────────
   const onDragStart = (key) => { dragCol.current = key; setDragKey(key); };
   const onDragEnter = (key) => { dragOverCol.current = key; setDragOverKey(key); };
   const onDragEnd   = () => {
@@ -560,7 +423,7 @@ export default function InternalEmployeesPage() {
     const from = newOrder.indexOf(dragCol.current);
     const to   = newOrder.indexOf(dragOverCol.current);
     newOrder.splice(from, 1); newOrder.splice(to, 0, dragCol.current);
-    setColOrder(newOrder); // ← persists via hook
+    setColOrder(newOrder);
     dragCol.current = null; dragOverCol.current = null;
   };
 
@@ -589,7 +452,7 @@ export default function InternalEmployeesPage() {
           </div>
           <div className="flex items-center gap-2">
             {canManage && (
-              <button onClick={() => navigate('/manage-columns')}
+              <button onClick={() => setShowManageCols(true)}
                 className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors shadow-sm">
                 <Settings2 className="h-4 w-4" /> Manage Columns
               </button>
@@ -798,9 +661,11 @@ export default function InternalEmployeesPage() {
           onSaved={fetchUsers} />
       )}
       {showManageCols && (
-        <ManageColumnsModal customCols={customCols}
+        <ManageColumnsModal
+          page="internal_employees"
           onClose={() => setShowManageCols(false)}
-          onRefresh={fetchCustomCols} />
+          onSaved={fetchCustomCols}
+        />
       )}
     </DashboardLayout>
   );

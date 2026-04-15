@@ -1,10 +1,11 @@
 import apiClient from '../api/axios';
 
 export const userService = {
-  getAll: async (params = {}) => {
-    const response = await apiClient.get('/users', { params });
-    return response.data;
-  },
+  // ✅ FIX: return the full axios response so callers can do response.data?.data
+ getAll: async (params = {}) => {
+  const response = await apiClient.get('/users', { params });
+  return response.data;
+},
 
   getById: async (id) => {
     const response = await apiClient.get(`/users/${id}`);
@@ -36,7 +37,6 @@ export const userService = {
     return response.data;
   },
 
-  // Upload profile photo — sends as multipart/form-data
   uploadPhoto: async (id, file) => {
     const formData = new FormData();
     formData.append('photo', file);
@@ -46,7 +46,6 @@ export const userService = {
     return response.data;
   },
 
-  // Remove profile photo
   deletePhoto: async (id) => {
     const response = await apiClient.delete(`/users/${id}/photo`);
     return response.data;

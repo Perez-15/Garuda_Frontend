@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import logo from '../../assets/Transparent_garuda.png';
@@ -22,10 +22,13 @@ import {
   Settings2,
   TrendingUp,
   Trash2,
+  Globe,
 } from 'lucide-react';
+import websiteApplicationService from '../../services/websiteApplicationService';
 
 export default function DashboardLayout({ children }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [pendingCount, setPendingCount] = useState(0);
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -38,6 +41,21 @@ export default function DashboardLayout({ children }) {
   const userRole = user?.roles?.[0]?.name;
   const isTA     = userRole === 'talent_acquisition';
   const isAdmin  = userRole === 'super_admin' || userRole === 'hr_admin';
+
+  // ── Fetch pending website applications count for badge ─────────────────────
+  useEffect(() => {
+    const fetchBadge = async () => {
+      try {
+        const res = await websiteApplicationService.getPendingCount();
+        setPendingCount(res.data.count);
+      } catch {
+        // silently fail — badge just won't show
+      }
+    };
+    fetchBadge();
+    const interval = setInterval(fetchBadge, 60000); // refresh every 60s
+    return () => clearInterval(interval);
+  }, []);
 
   // ── Active check helpers ───────────────────────────────────────────────────
   const isActive     = (path) => location.pathname === path;
@@ -83,8 +101,8 @@ export default function DashboardLayout({ children }) {
       icon: Users,
       group: true,
       children: [
-        { name: 'In-Process',     href: '/in-process', icon: UserCog              },
-        { name: 'Employed',       href: '/employees',  icon: UserCheck             },
+        { name: 'In-Process', href: '/in-process', icon: UserCog   },
+        { name: 'Employed',   href: '/employees',  icon: UserCheck },
       ],
     },
     {
@@ -119,6 +137,16 @@ export default function DashboardLayout({ children }) {
       ? [{ name: 'Users', href: '/users', icon: UsersIcon }]
       : []),
 
+    // Website Applications — visible to admin and marketing roles only
+    ...(['super_admin', 'hr_admin', 'marketing'].includes(userRole)
+      ? [{
+          name: 'Website Applications',
+          href: '/website-applications',
+          icon: Globe,
+          badge: pendingCount,
+        }]
+      : []),
+
     {
       name: 'Settings',
       icon: Settings2,
@@ -135,7 +163,6 @@ export default function DashboardLayout({ children }) {
           ? [{ name: 'Manage Columns', href: '/manage-columns', icon: Settings2 }]
           : []),
 
-        // Recently Deleted — admin only, tucked at the bottom of Settings
         ...(isAdmin
           ? [{
               name: 'Recently Deleted',
@@ -196,7 +223,6 @@ export default function DashboardLayout({ children }) {
                     ? true
                     : isActive(child.href);
 
-                // "Recently Deleted" gets a subtle red tint to signal danger zone
                 const isDeleted = child.href === '/recently-deleted';
 
                 return (
@@ -224,7 +250,7 @@ export default function DashboardLayout({ children }) {
       );
     }
 
-    // Regular link
+    // Regular link (with optional badge)
     return (
       <Link
         to={item.href}
@@ -235,7 +261,12 @@ export default function DashboardLayout({ children }) {
             : 'text-gray-300 hover:bg-gray-700 hover:text-white'}`}
       >
         <item.icon className="mr-3 h-5 w-5 flex-shrink-0" />
-        {item.name}
+        <span className="flex-1">{item.name}</span>
+        {item.badge > 0 && (
+          <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
+            {item.badge > 99 ? '99+' : item.badge}
+          </span>
+        )}
       </Link>
     );
   };
