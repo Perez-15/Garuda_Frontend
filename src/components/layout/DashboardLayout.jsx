@@ -60,7 +60,7 @@ export default function DashboardLayout({ children }) {
   // ── Active check helpers ───────────────────────────────────────────────────
   const isActive     = (path) => location.pathname === path;
   const isStartsWith = (path) => location.pathname.startsWith(path);
-
+const clientsOpen = isStartsWith('/clients');
   // ── Route-based group open state ───────────────────────────────────────────
   const applicantsOpen =
     isStartsWith('/applicants') ||
@@ -137,41 +137,43 @@ export default function DashboardLayout({ children }) {
       ? [{ name: 'Users', href: '/users', icon: UsersIcon }]
       : []),
 
-    // Website Applications — visible to admin and marketing roles only
-    ...(['super_admin', 'hr_admin', 'marketing'].includes(userRole)
-      ? [{
+    
+    {
           name: 'Website Applications',
           href: '/website-applications',
           icon: Globe,
           badge: pendingCount,
-        }]
+        },
+
+
+{
+  name: 'Clients',
+  icon: Building2,
+  group: true,
+  children: [
+    { name: 'All Clients', href: '/clients', icon: Building2 },
+    { name: 'Prospects', href: '/clients/prospects', icon: Users },
+  ],
+},
+
+{
+  name: 'Settings',
+  icon: Settings2,
+  group: true,
+  children: [
+    { name: 'Branches', href: '/branches', icon: MapPin },
+
+    ...(!isTA
+      ? [{ name: 'Process', href: '/workflows', icon: Workflow }]
       : []),
 
     {
-      name: 'Settings',
-      icon: Settings2,
-      group: true,
-      children: [
-        { name: 'Clients',  href: '/clients',  icon: Building2 },
-        { name: 'Branches', href: '/branches', icon: MapPin    },
-
-        ...(!isTA
-          ? [{ name: 'Process', href: '/workflows', icon: Workflow }]
-          : []),
-
-        ...(isAdmin
-          ? [{ name: 'Manage Columns', href: '/manage-columns', icon: Settings2 }]
-          : []),
-
-        ...(isAdmin
-          ? [{
-              name: 'Recently Deleted',
-              href: '/recently-deleted',
-              icon: Trash2,
-            }]
-          : []),
-      ],
+      name: 'Recently Deleted',
+      href: '/recently-deleted',
+      icon: Trash2,
     },
+  ],
+},
   ];
 
   // ── Logo ───────────────────────────────────────────────────────────────────
@@ -191,8 +193,10 @@ export default function DashboardLayout({ children }) {
       const isGroupActive =
         item.name === 'External'   ? applicantsOpen :
         item.name === 'Attendance' ? attendanceOpen :
+        item.name === 'Clients'    ? isStartsWith('/clients') :
         item.name === 'Settings'   ? settingsOpen   :
         false;
+        
 
       const isOpen = openGroups[item.name] || isGroupActive;
 

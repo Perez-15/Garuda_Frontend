@@ -1,11 +1,9 @@
-// pages/External/Applicants/InProcessPage.jsx
+// pages/External/InProcess/InProcessPage.jsx
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Search, UserCog, ChevronRight, CalendarDays, Building2,
-  Settings2, Plus, Edit2, Save, X, Loader2, Trash2,
-  ChevronUp, ChevronDown, GripVertical, Filter, Users, UserPlus,
-  UserX,
+  Settings2, X, Filter, Users, UserPlus, UserX,
 } from 'lucide-react';
 import DashboardLayout from '../../../components/layout/DashboardLayout';
 import { applicantService } from '../../../services/applicantService';
@@ -14,6 +12,7 @@ import { userService } from '../../../services/userService';
 import { customColumnService } from '../../../services/customcolumnService';
 import { useAuth } from '../../../contexts/AuthContext';
 import { usePersistedColumns } from '../../../hooks/usePersistedColumns';
+import ManageColumnsModal from '../../../components/Modal/ManageColumnsModal';
 
 const PAGE = 'in_process';
 
@@ -95,8 +94,9 @@ function CellValue({ colKey, applicant }) {
           {fmt(applicant.applied_at)}
         </div>
       );
+    // FIX: handled_by reads the TA/recruiter relationship
     case 'handled_by': {
-      const ta = applicant.created_by;
+      const ta = applicant.talentAcquisition ?? applicant.handled_by ?? applicant.ta_user;
       if (!ta) return <span className="text-gray-300 text-xs">—</span>;
       const name = typeof ta === 'string' ? ta : (ta.name ?? ta.full_name ?? '—');
       return (
@@ -106,8 +106,9 @@ function CellValue({ colKey, applicant }) {
         </div>
       );
     }
+    // FIX: added_by reads a separate relationship — update keys to match your API response
     case 'added_by': {
-      const creator = applicant.createdBy ?? applicant.created_by_user ?? applicant.created_by;
+      const creator = applicant.createdBy ?? applicant.created_by_user ?? applicant.addedBy;
       if (!creator || typeof creator !== 'object') return <span className="text-gray-300 text-xs">—</span>;
       const name = creator.name ?? creator.full_name ?? '—';
       return (
@@ -126,170 +127,7 @@ function CellValue({ colKey, applicant }) {
   }
 }
 
-// ── Manage Columns Modal ──────────────────────────────────────────────────────
-function ManageColumnsModal({ customCols, onClose, onRefresh }) {
-  const [cols, setCols]           = useState(customCols.map((c) => ({ ...c })));
-  const [newLabel, setNewLabel]   = useState('');
-  const [newType, setNewType]     = useState('text');
-  const [editingId, setEditingId] = useState(null);
-  const [editLabel, setEditLabel] = useState('');
-  const [saving, setSaving]       = useState(false);
-  const [error, setError]         = useState('');
-
-  const handleAdd = async () => {
-    const trimmed = newLabel.trim();
-    if (!trimmed) { setError('Column name is required.'); return; }
-    const field_key = trimmed.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
-    if (!field_key) { setError('Invalid column name.'); return; }
-    try {
-      setSaving(true);
-      const res = await customColumnService.create({
-        page: PAGE, field_key, label: trimmed, type: newType, order: cols.length,
-      });
-      if (res.column) {
-        setCols((prev) => [...prev, res.column]);
-        setNewLabel(''); setNewType('text'); setError('');
-      } else {
-        setError(res.message || 'Failed to add column.');
-      }
-    } catch { setError('Server error. Please try again.'); }
-    finally { setSaving(false); }
-  };
-
-  const handleRename = async (col) => {
-    const trimmed = editLabel.trim();
-    if (!trimmed) { setError('Column name is required.'); return; }
-    try {
-      setSaving(true);
-      await customColumnService.update(col.id, { label: trimmed });
-      setCols((prev) => prev.map((c) => c.id === col.id ? { ...c, label: trimmed } : c));
-      setEditingId(null); setError('');
-    } catch { setError('Failed to rename column.'); }
-    finally { setSaving(false); }
-  };
-
-  const handleDelete = async (col) => {
-    if (!confirm(`Delete column "${col.label}"?`)) return;
-    try {
-      await customColumnService.remove(col.id);
-      setCols((prev) => prev.filter((c) => c.id !== col.id));
-    } catch { setError('Failed to delete column.'); }
-  };
-
-  const move = async (index, dir) => {
-    const next = [...cols];
-    const target = index + dir;
-    if (target < 0 || target >= next.length) return;
-    [next[index], next[target]] = [next[target], next[index]];
-    setCols(next);
-    await customColumnService.reorder(PAGE, next.map((c) => c.id));
-  };
-
-  const handleDone = () => { onRefresh(); onClose(); };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" onClick={handleDone} />
-      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col max-h-[85vh]">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-          <div>
-            <h3 className="text-base font-semibold text-gray-900">Manage Table Columns</h3>
-            <p className="text-xs text-gray-400 mt-0.5">Changes are saved directly to the database</p>
-          </div>
-          <button onClick={handleDone} className="text-gray-400 hover:text-gray-600"><X className="h-5 w-5" /></button>
-        </div>
-
-        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-2">
-          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">Default Columns</p>
-          {FIXED_COLUMNS.map((col) => (
-            <div key={col.key} className="flex items-center gap-2 p-2.5 rounded-lg border border-gray-100 bg-gray-50">
-              <GripVertical className="h-4 w-4 text-gray-200 flex-shrink-0" />
-              <span className="flex-1 text-sm text-gray-500">{col.label}</span>
-              <span className="text-xs text-gray-300 bg-gray-100 px-2 py-0.5 rounded">fixed</span>
-            </div>
-          ))}
-
-          {cols.length > 0 && (
-            <>
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mt-4 mb-1">Custom Columns</p>
-              {cols.map((col, index) => (
-                <div key={col.id} className="flex items-center gap-2 p-2.5 rounded-lg border border-blue-100 bg-blue-50 group">
-                  <div className="flex flex-col gap-0.5">
-                    <button onClick={() => move(index, -1)} disabled={index === 0}
-                      className="text-gray-300 hover:text-gray-600 disabled:opacity-20"><ChevronUp className="h-3 w-3" /></button>
-                    <button onClick={() => move(index, 1)} disabled={index === cols.length - 1}
-                      className="text-gray-300 hover:text-gray-600 disabled:opacity-20"><ChevronDown className="h-3 w-3" /></button>
-                  </div>
-                  <GripVertical className="h-4 w-4 text-blue-200 flex-shrink-0" />
-                  {editingId === col.id ? (
-                    <input autoFocus value={editLabel}
-                      onChange={(e) => setEditLabel(e.target.value)}
-                      onKeyDown={(e) => { if (e.key === 'Enter') handleRename(col); if (e.key === 'Escape') setEditingId(null); }}
-                      className="flex-1 px-2 py-1 text-sm border border-blue-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                  ) : (
-                    <span className="flex-1 text-sm text-gray-700">
-                      {col.label} <span className="text-xs text-blue-400">({col.type})</span>
-                    </span>
-                  )}
-                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    {editingId === col.id ? (
-                      <>
-                        <button onClick={() => handleRename(col)} disabled={saving}
-                          className="p-1 text-green-600 hover:bg-green-50 rounded"><Save className="h-3.5 w-3.5" /></button>
-                        <button onClick={() => setEditingId(null)}
-                          className="p-1 text-gray-400 hover:bg-gray-100 rounded"><X className="h-3.5 w-3.5" /></button>
-                      </>
-                    ) : (
-                      <>
-                        <button onClick={() => { setEditingId(col.id); setEditLabel(col.label); setError(''); }}
-                          className="p-1 text-blue-500 hover:bg-blue-100 rounded"><Edit2 className="h-3.5 w-3.5" /></button>
-                        <button onClick={() => handleDelete(col)}
-                          className="p-1 text-red-400 hover:bg-red-50 rounded"><Trash2 className="h-3.5 w-3.5" /></button>
-                      </>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </>
-          )}
-        </div>
-
-        <div className="px-6 py-4 border-t border-gray-100 space-y-3">
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Add New Column</p>
-          <div className="flex gap-2">
-            <input value={newLabel}
-              onChange={(e) => { setNewLabel(e.target.value); setError(''); }}
-              onKeyDown={(e) => { if (e.key === 'Enter') handleAdd(); }}
-              placeholder="e.g. Interview Score, Notes..."
-              className="flex-1 px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
-            <select value={newType} onChange={(e) => setNewType(e.target.value)}
-              className="px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
-              <option value="text">Text</option>
-              <option value="number">Number</option>
-              <option value="date">Date</option>
-            </select>
-          </div>
-          <button onClick={handleAdd} disabled={saving}
-            className="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-medium text-white bg-gray-900 rounded-lg hover:bg-gray-800 disabled:opacity-50 transition-colors">
-            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-            Add Column to Database
-          </button>
-          {error && <p className="text-xs text-red-500">{error}</p>}
-        </div>
-
-        <div className="flex justify-end px-6 py-4 border-t border-gray-100">
-          <button onClick={handleDone}
-            className="px-5 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors">
-            Done
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
-// NOTE: ApplicantDetailPage also needs updating — see separate output file
 // Main Page
 // ─────────────────────────────────────────────────────────────────────────────
 export default function InProcessPage() {
@@ -317,7 +155,8 @@ export default function InProcessPage() {
   const [periodFilter, setPeriodFilter] = useState('');
 
   // ── Column management — persisted per user in localStorage ───────────────
-  const { visibleCols, colOrder, toggleColumn: _toggleColumn, setColOrder } =
+  // FIX: removed unused `setColOrder` from destructuring
+  const { visibleCols, colOrder, toggleColumn: _toggleColumn } =
     usePersistedColumns('inprocess', currentUser?.id, DEFAULT_VISIBLE);
   const [showColPicker,  setShowColPicker]  = useState(false);
   const [showManageCols, setShowManageCols] = useState(false);
@@ -330,8 +169,18 @@ export default function InProcessPage() {
   // ── Boot ──────────────────────────────────────────────────────────────────
   useEffect(() => { fetchBranches(); fetchCustomCols(); fetchStats(); }, []);
   useEffect(() => { if (canFilterByTA) fetchTaUsers(); }, [canFilterByTA]);
-  useEffect(() => { fetchApplicants(); }, [debouncedSearch, activeTab, branchFilter, sourceFilter, taFilter, sortFilter, periodFilter, currentPage, perPage]);
-  useEffect(() => { setCurrentPage(1); }, [debouncedSearch, activeTab, branchFilter, sourceFilter, taFilter, sortFilter, periodFilter, perPage]);
+
+  // FIX: reset page to 1 whenever any filter/sort changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [debouncedSearch, activeTab, branchFilter, sourceFilter, taFilter, sortFilter, periodFilter, perPage]);
+
+  // Fetch applicants whenever filters or page changes
+  useEffect(() => {
+    fetchApplicants();
+  }, [debouncedSearch, activeTab, branchFilter, sourceFilter, taFilter, sortFilter, periodFilter, currentPage, perPage]);
+
+  // FIX: also refresh stats when taFilter or periodFilter changes (not just branchFilter)
   useEffect(() => { fetchStats(); }, [branchFilter, taFilter, periodFilter]);
 
   // ── Fetchers ──────────────────────────────────────────────────────────────
@@ -429,8 +278,7 @@ export default function InProcessPage() {
   const hasActiveFilters = searchInput || branchFilter || sourceFilter || taFilter || periodFilter;
   const selectedTA = taUsers.find((u) => String(u.id) === String(taFilter));
 
-  // ── Tab badge label ───────────────────────────────────────────────────────
-  const tabCountLabel = activeTab === 'active' ? 'active'
+  const tabCountLabel = activeTab === 'active'  ? 'active'
     : activeTab === 'pooling' ? 'pooling'
     : 'backed out';
 
@@ -459,8 +307,10 @@ export default function InProcessPage() {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <button onClick={() => setShowManageCols(true)}
-              className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors shadow-sm">
+            <button
+              onClick={() => setShowManageCols(true)}
+              className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors shadow-sm"
+            >
               <Settings2 className="h-4 w-4" /> Manage Columns
             </button>
             <Link to="/applicants/new"
@@ -470,10 +320,8 @@ export default function InProcessPage() {
           </div>
         </div>
 
-        {/* ── Tab strip — 3 tabs: In-Process, Pooling, Back Outs ──────────── */}
+        {/* ── Tab strip ───────────────────────────────────────────────────── */}
         <div className="flex items-center gap-1 bg-white rounded-xl border border-gray-100 shadow-sm p-1 overflow-x-auto w-fit">
-
-          {/* In-Process tab */}
           <button
             onClick={() => setActiveTab('active')}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap transition-all
@@ -488,7 +336,6 @@ export default function InProcessPage() {
             )}
           </button>
 
-          {/* Pooling tab */}
           <button
             onClick={() => setActiveTab('pooling')}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap transition-all
@@ -503,7 +350,6 @@ export default function InProcessPage() {
             )}
           </button>
 
-          {/* Back Outs tab */}
           <button
             onClick={() => setActiveTab('backout')}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap transition-all
@@ -517,13 +363,10 @@ export default function InProcessPage() {
               </span>
             )}
           </button>
-
         </div>
 
         {/* ── Filters ───────────────────────────────────────────────────── */}
         <div className="bg-white shadow rounded-lg p-4 space-y-3">
-
-          {/* Row 1 */}
           <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
             <div className="md:col-span-2 relative">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -564,10 +407,16 @@ export default function InProcessPage() {
             </select>
           </div>
 
-          {/* Row 2 — Recruiter + Period pushed to the right */}
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-            <div className="md:col-start-4">
-              {isAdmin && (
+          {/* Row 2 — Admin: Recruiter + Period */}
+          {isAdmin && (
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-4 pt-3 border-t border-gray-100">
+              <div className="md:col-span-3 flex items-center gap-2">
+                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-700">
+                  Admin Filters
+                </span>
+                <span className="text-xs text-gray-400">Filter by recruiter or time period</span>
+              </div>
+              <div>
                 <select value={taFilter} onChange={(e) => setTaFilter(e.target.value)}
                   className="block w-full pl-3 pr-10 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500">
                   <option value="">All Recruiters</option>
@@ -575,19 +424,19 @@ export default function InProcessPage() {
                     <option key={ta.id} value={ta.id}>{ta.name ?? ta.full_name}</option>
                   ))}
                 </select>
-              )}
+              </div>
+              <div>
+                <select value={periodFilter} onChange={(e) => setPeriodFilter(e.target.value)}
+                  className="block w-full pl-3 pr-10 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                  <option value="">All Time</option>
+                  <option value="today">Today</option>
+                  <option value="this_week">This Week</option>
+                  <option value="this_month">This Month</option>
+                  <option value="this_year">This Year</option>
+                </select>
+              </div>
             </div>
-            <div>
-              <select value={periodFilter} onChange={(e) => setPeriodFilter(e.target.value)}
-                className="block w-full pl-3 pr-10 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500">
-                <option value="">All Time</option>
-                <option value="today">Today</option>
-                <option value="this_week">This Week</option>
-                <option value="this_month">This Month</option>
-                <option value="this_year">This Year</option>
-              </select>
-            </div>
-          </div>
+          )}
 
           {/* Bottom row */}
           <div className="flex items-center justify-between pt-2 border-t border-gray-100">
@@ -604,7 +453,10 @@ export default function InProcessPage() {
                 {showColPicker && (
                   <div className="absolute left-0 top-full mt-1 z-30 bg-white rounded-xl shadow-lg border border-gray-100 p-3 w-56">
                     <div className="flex items-center justify-between mb-2">
-                      <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Show / Hide</span>
+                      <div>
+                        <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Show / Hide Columns</span>
+                        <p className="text-xs text-gray-400 mt-0.5">Changes apply only to your account</p>
+                      </div>
                       <button onClick={() => setShowColPicker(false)}><X className="h-4 w-4 text-gray-400 hover:text-gray-600" /></button>
                     </div>
                     <div className="space-y-1 max-h-56 overflow-y-auto">
@@ -625,6 +477,7 @@ export default function InProcessPage() {
                 )}
               </div>
 
+              {/* Active filter chips */}
               {branchFilter && (() => {
                 const b = branches.find((x) => String(x.id) === String(branchFilter));
                 return b ? (
@@ -656,8 +509,8 @@ export default function InProcessPage() {
 
             <div className="flex items-center gap-3">
               {hasActiveFilters && (
-                <button onClick={clearAllFilters} className="text-xs text-gray-400 hover:text-red-500">
-                  Clear all filters
+                <button onClick={clearAllFilters} className="text-xs text-red-400 hover:text-red-600 flex items-center gap-1">
+                  <X className="h-3 w-3" /> Clear all filters
                 </button>
               )}
               <span className="text-xs text-gray-400">Rows per page:</span>
@@ -758,11 +611,12 @@ export default function InProcessPage() {
 
       </div>
 
+      {/* ── Manage Columns Modal ─────────────────────────────────────────── */}
       {showManageCols && (
         <ManageColumnsModal
-          customCols={customCols}
+          page={PAGE}
           onClose={() => setShowManageCols(false)}
-          onRefresh={fetchCustomCols}
+          onSaved={fetchCustomCols}
         />
       )}
 

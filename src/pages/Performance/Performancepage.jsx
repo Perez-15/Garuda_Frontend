@@ -291,7 +291,7 @@ export default function PerformancePage() {
   const [loadingBranch, setLoadingBranch] = useState(false);
   const [lastRefreshed, setLastRefreshed] = useState(null);
   const [selectedTA,    setSelectedTA]    = useState(null);
-
+  const [clientFilter,  setClientFilter]  = useState(''); 
   const fetchTA = useCallback(async () => {
     try {
       setLoadingTA(true);
@@ -322,9 +322,11 @@ export default function PerformancePage() {
   const totalInProcess  = taData.reduce((s, r) => s + (r.in_process ?? 0), 0);
   const totalPooling    = taData.reduce((s, r) => s + (r.pooling    ?? 0), 0);
   const totalBackOuts   = taData.reduce((s, r) => s + (r.backouts   ?? 0), 0);
-  const totalIncomplete = branchData.reduce((s, r) => s + (r.incomplete_docs ?? 0), 0);
-  const maxDeployed     = Math.max(...taData.map(r => r.deployed   ?? 0), 1);
-  const maxInProcess    = Math.max(...branchData.map(r => r.in_process ?? 0), 1);
+ const maxDeployed        = Math.max(...taData.map(r => r.deployed   ?? 0), 1);
+const maxInProcess       = Math.max(...branchData.map(r => r.in_process ?? 0), 1);
+const clientOptions      = [...new Set(branchData.map(b => b.client).filter(Boolean))].sort();
+const filteredBranchData = clientFilter ? branchData.filter(b => b.client === clientFilter) : branchData;
+const totalIncomplete    = filteredBranchData.reduce((s, r) => s + (r.incomplete_docs ?? 0), 0);
 
   const dateLabel = DATE_FILTERS.find(f => f.key === dateFilter)?.label ?? 'All Time';
 
@@ -524,19 +526,33 @@ export default function PerformancePage() {
         )}
 
         {/* ── Branch Performance Tab ── */}
-        {activeTab === 'branch' && (
-          <div className="bg-white shadow rounded-xl overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-              <div>
-                <h2 className="text-base font-semibold text-gray-900">Branch Health</h2>
-                <p className="text-xs text-gray-400 mt-0.5">Sorted by blockers (incomplete docs) · Employees always show current active headcount</p>
-              </div>
-              <span className="text-xs text-gray-400 bg-gray-50 px-2 py-1 rounded-full">{branchData.length} branches</span>
-            </div>
+       {activeTab === 'branch' && (
+  <div className="bg-white shadow rounded-xl overflow-hidden">
+    <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between gap-4">
+  <div>
+    <h2 className="text-base font-semibold text-gray-900">Branch Health</h2>
+    <p className="text-xs text-gray-400 mt-0.5">Sorted by blockers (incomplete docs) · Employees always show current active headcount</p>
+  </div>
+  <div className="flex items-center gap-3 flex-shrink-0">
+    <select
+      value={clientFilter}
+      onChange={(e) => setClientFilter(e.target.value)}
+      className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 text-gray-600 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+    >
+      <option value="">All Clients</option>
+      {clientOptions.map(c => (
+        <option key={c} value={c}>{c}</option>
+      ))}
+    </select>
+    <span className="text-xs text-gray-400 bg-gray-50 px-2 py-1 rounded-full whitespace-nowrap">
+      {filteredBranchData.length} branch{filteredBranchData.length !== 1 ? 'es' : ''}
+    </span>
+  </div>
+</div>
 
             {loadingBranch ? (
               <div className="p-8 space-y-4">{[1,2,3,4].map(i => <div key={i} className="h-14 bg-gray-100 rounded-xl animate-pulse" />)}</div>
-            ) : branchData.length === 0 ? (
+            ) : filteredBranchData.length === 0 ? (
               <div className="text-center py-16 text-gray-400">
                 <Building2 className="h-10 w-10 mx-auto mb-3 opacity-30" />
                 <p>No active branches found.</p>
@@ -553,7 +569,7 @@ export default function PerformancePage() {
                 </div>
 
                 <div className="divide-y divide-gray-50">
-                  {branchData.map(branch => {
+                  {filteredBranchData.map(branch => {
                     const hasBlocker = branch.incomplete_docs > 0;
                     return (
                       // Row — 4+2+2+2+2 = 12

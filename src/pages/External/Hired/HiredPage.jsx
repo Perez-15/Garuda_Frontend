@@ -1,11 +1,10 @@
 // pages/External/Hired/HiredPage.jsx
 import { useState, useEffect, useRef } from 'react';
-import { Link } from 'react-router-dom';
 import {
   Search, UserCheck, Building2, CalendarDays, ChevronRight,
-  GripVertical, Filter, X, Users, Settings2, Plus, Trash2,
-  Edit2, Save, ChevronUp, ChevronDown, Loader2, UserPlus,
+  GripVertical, Filter, X, Users, Settings2, UserPlus,
 } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import DashboardLayout from '../../../components/layout/DashboardLayout';
 import { employeeService } from '../../../services/hiredService';
 import { branchService } from '../../../services/branchService';
@@ -27,7 +26,10 @@ function useDebounce(value, delay = 400) {
 
 // ── Status tab config ─────────────────────────────────────────────────────────
 const STATUS_TABS = [
-  { key: 's',          label: 'All',        color: 'gray'   },
+  // FIX 1: Changed key from 's' to 'all' so stats lookup (stats['all']) can
+  //         match a real API field. The fetch guard below uses key === 'all'
+  //         instead of key === 's' to omit the status param.
+  { key: 'all',        label: 'All',        color: 'gray'   },
   { key: 'active',     label: 'Active',     color: 'green'  },
   { key: 'resigned',   label: 'Resigned',   color: 'yellow' },
   { key: 'terminated', label: 'Terminated', color: 'red'    },
@@ -115,7 +117,7 @@ const FIXED_COLUMNS = [
   { key: 'daily_rate',              label: 'Daily Rate',        always: false, fixed: true },
   { key: 'hr_actions',              label: 'HR Actions',        always: false, fixed: true },
   { key: 'handled_by',              label: 'Handled By (TA)',   always: false, fixed: true },
-  { key: 'added_by',               label: 'Added By',          always: false, fixed: true },
+  { key: 'added_by',                label: 'Added By',          always: false, fixed: true },
 ];
 
 const DEFAULT_VISIBLE = [
@@ -258,13 +260,13 @@ export default function HiredPage() {
   const [perPage,     setPerPage]     = useState(15);
 
   // ── Filters ───────────────────────────────────────────────────────────────
+  // FIX 1 (continued): Default tab is now 'active' matching the new key scheme.
   const [activeTab,    setActiveTab]    = useState('active');
   const [searchInput,  setSearchInput]  = useState('');
   const debouncedSearch                 = useDebounce(searchInput, 400);
   const [branchFilter, setBranchFilter] = useState('');
   const [reqFilter,    setReqFilter]    = useState('');
-  const [sortBy,  setSortBy]  = useState('date_hired');
-  const [sortDir, setSortDir] = useState('desc');
+  const [sortOption, setSortOption] = useState('newest');
   const [taFilter,     setTaFilter]     = useState('');
   const [periodFilter, setPeriodFilter] = useState('');
 
@@ -286,19 +288,28 @@ export default function HiredPage() {
   const canFilterByTA = !isTA;
 
   // ── Boot ──────────────────────────────────────────────────────────────────
-  useEffect(() => { fetchBranches(); fetchCustomCols(); }, []);
+  // FIX 3: Added currentUser to the dependency array so fetchBranches re-runs
+  //         once the authenticated user is available (avoids wrong branch
+  //         endpoint being called for TA users on first render).
+  useEffect(() => {
+    if (!currentUser) return;
+    fetchBranches();
+    fetchCustomCols();
+  }, [currentUser]);
 
   useEffect(() => { if (!canFilterByTA) return; fetchTaUsers(); }, [canFilterByTA]);
 
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [debouncedSearch, activeTab, branchFilter, reqFilter, taFilter, periodFilter, perPage, sortBy, sortDir]);
+ useEffect(() => {
+  setCurrentPage(1);
+}, [debouncedSearch, activeTab, branchFilter, reqFilter, taFilter, periodFilter, perPage, sortOption]);
 
   useEffect(() => { fetchStats(); }, [branchFilter]);
 
+  // FIX 2: Added sortBy and sortDir to the dependency array so changing the
+  //         sort column/direction actually triggers a data re-fetch.
   useEffect(() => {
-    fetchEmployees();
-  }, [debouncedSearch, activeTab, branchFilter, reqFilter, taFilter, periodFilter, currentPage, perPage]);
+  fetchEmployees();
+}, [debouncedSearch, activeTab, branchFilter, reqFilter, taFilter, periodFilter, currentPage, perPage, sortOption]);
 
   // ── Data fetchers ─────────────────────────────────────────────────────────
   const fetchBranches = async () => {
@@ -337,6 +348,14 @@ export default function HiredPage() {
     } catch (e) { console.error(e); }
   };
 
+  const sortMap = {
+  newest:   { sortBy: 'date_hired', sortDir: 'desc' },
+  oldest:   { sortBy: 'date_hired', sortDir: 'asc'  },
+  name_asc: { sortBy: 'full_name',  sortDir: 'asc'  },
+  name_desc:{ sortBy: 'full_name',  sortDir: 'desc' },
+};
+const { sortBy, sortDir } = sortMap[sortOption];
+
   const fetchEmployees = async () => {
     try {
       setLoading(true);
@@ -346,7 +365,8 @@ export default function HiredPage() {
         search:    debouncedSearch,
         sort_by:   sortBy,
         sort_dir:  sortDir,
-        ...(activeTab && activeTab !== 's' && { status: activeTab }),
+        // FIX 1 (continued): Guard now uses 'all' instead of 's'.
+        ...(activeTab && activeTab !== 'all' && { status: activeTab }),
         ...(branchFilter && { branch_id: branchFilter }),
         ...(reqFilter    && { requirements_status: reqFilter }),
         ...(taFilter     && { ta_id: taFilter }),
@@ -443,9 +463,11 @@ export default function HiredPage() {
             return (
               <button key={tab.key} onClick={() => setActiveTab(tab.key)}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap transition-all ${isActive ? styles.active + ' shadow-sm' : styles.inactive}`}>
-                {tab.key && <span className={`h-2 w-2 rounded-full flex-shrink-0 ${isActive ? 'bg-white/70' : styles.dot}`} />}
+                <span className={`h-2 w-2 rounded-full flex-shrink-0 ${isActive ? 'bg-white/70' : styles.dot}`} />
                 {tab.label}
-                {tab.key && stats && (
+                {/* FIX 1 (continued): stats[tab.key] now resolves correctly because
+                    keys match the API response fields ('all', 'active', etc.). */}
+                {stats && (
                   <span className={`text-xs px-1.5 py-0.5 rounded-full font-semibold ${isActive ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-500'}`}>
                     {stats[tab.key] ?? 0}
                   </span>
@@ -455,50 +477,49 @@ export default function HiredPage() {
           })}
         </div>
 
-        {/* ── Filters ─────────────────────────────────────────────────────── */}
-        <div className="bg-white shadow rounded-lg p-4 space-y-3">
+      {/* ── Filters ─────────────────────────────────────────────────────── */}
+<div className="bg-white shadow rounded-lg p-4 space-y-3">
 
-          {/* Row 1 */}
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-            <div className="md:col-span-2 relative">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <Search className="h-5 w-5 text-gray-400" />
-              </div>
-              <input type="text" value={searchInput} onChange={(e) => setSearchInput(e.target.value)}
-                placeholder="Search name, email or contact..."
-                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500" />
-            </div>
+  {/* Row 1 */}
+  <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+    <div className="md:col-span-2 relative">
+      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+        <Search className="h-5 w-5 text-gray-400" />
+      </div>
+      <input type="text" value={searchInput} onChange={(e) => setSearchInput(e.target.value)}
+        placeholder="Search name, email or contact..."
+        className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500" />
+    </div>
 
-            <select value={branchFilter} onChange={(e) => setBranchFilter(e.target.value)}
-              className="block w-full pl-3 pr-10 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500">
-              <option value="">All Branches</option>
-              {branches.map((b) => <option key={b.id} value={b.id}>{b.branch_name}</option>)}
-            </select>
+    <select value={branchFilter} onChange={(e) => setBranchFilter(e.target.value)}
+      className="block w-full pl-3 pr-10 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+      <option value="">All Branches</option>
+      {branches.map((b) => <option key={b.id} value={b.id}>{b.branch_name}</option>)}
+    </select>
 
-            <select value={reqFilter} onChange={(e) => setReqFilter(e.target.value)}
-              className="block w-full pl-3 pr-10 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500">
-              <option value="">All Requirements</option>
-              <option value="complete">✓ Complete</option>
-              <option value="incomplete">✗ Incomplete</option>
-              <option value="pending">⏳ Pending</option>
-            </select>
+    <select value={reqFilter} onChange={(e) => setReqFilter(e.target.value)}
+      className="block w-full pl-3 pr-10 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+      <option value="">All Requirements</option>
+      <option value="complete">✓ Complete</option>
+      <option value="incomplete">✗ Incomplete</option>
+      <option value="pending">⏳ Pending</option>
+    </select>
 
-            <div className="flex gap-2">
-              <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}
-                className="flex-1 pl-3 pr-8 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500">
-                <option value="date_hired">Date Hired</option>
-                <option value="full_name">Name</option>
-                <option value="date_resigned">Date End</option>
-                <option value="daily_rate">Daily Rate</option>
-                <option value="employment_status">Status</option>
-              </select>
-              <button onClick={() => setSortDir((d) => d === 'asc' ? 'desc' : 'asc')}
-                className="px-3 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50 transition-colors text-gray-600 flex-shrink-0"
-                title={sortDir === 'asc' ? 'Ascending' : 'Descending'}>
-                {sortDir === 'asc' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-              </button>
-            </div>
-          </div>
+    <select
+      value={sortOption}
+      onChange={(e) => setSortOption(e.target.value)}
+      className="block w-full pl-3 pr-10 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+    >
+      <optgroup label="Sort by Date">
+        <option value="newest">Newest First</option>
+        <option value="oldest">Oldest First</option>
+      </optgroup>
+      <optgroup label="Sort by Name">
+        <option value="name_asc">Name A–Z</option>
+        <option value="name_desc">Name Z–A</option>
+      </optgroup>
+    </select>
+  </div>
 
           {/* Row 2 — Admin filters */}
           {isAdmin && (
@@ -708,6 +729,7 @@ export default function HiredPage() {
           )}
         </div>
       </div>
+  
 
       {showManageCols && (
         <ManageColumnsModal
@@ -716,7 +738,8 @@ export default function HiredPage() {
           onSaved={fetchCustomCols}
         />
       )}
-
+    
     </DashboardLayout>
   );
+
 }

@@ -21,20 +21,17 @@ import UserProfilePage       from './pages/Internal/Userprofilepage.jsx';
 
 // Other Pages
 import ClientsPage         from './pages/Clients/ClientsPage';
+import ClientProspectsPage from './pages/Clients/Clientprospectspage';
 import BranchesPage        from './pages/Branches/BranchesPage';
 import WorkflowsPage       from './pages/Workflows/WorkflowsPage';
 import WorkflowBuilderPage from './pages/Workflows/WorkflowBuilderPage';
 import ReportsPage         from './pages/Reports/ReportsPage';
-import PositionsPage       from './pages/Positions/PositionsPage';
+import PositionsPage       from './pages/Positions/PositionsPage.jsx';
 import UsersPage           from './pages/Users/UsersPage';
 
 // Attendance
 import AttendancePage     from './pages/Attendance/Attendancepage';
 import TeamAttendancePage from './pages/Attendance/Teamattendancepage';
-
-// Manage Columns
-import ManageColumnsPage from './pages/ManageColumn/Managecolumnspage';
-import SchemaEditorPage  from './pages/ManageColumn/Schemaeditorpage';
 
 // Performance
 import PerformancePage from './pages/Performance/Performancepage';
@@ -80,7 +77,7 @@ function App() {
 
           {/* ── Clients ────────────────────────────────────────────────────── */}
           <Route path="/clients"  element={<ProtectedRoute><ClientsPage /></ProtectedRoute>} />
-
+<Route path="/clients/prospects" element={<ProtectedRoute><ClientProspectsPage /></ProtectedRoute>} />
           {/* ── Branches ───────────────────────────────────────────────────── */}
           <Route path="/branches" element={<ProtectedRoute><BranchesPage /></ProtectedRoute>} />
 
@@ -97,9 +94,7 @@ function App() {
           {/* ── Positions ──────────────────────────────────────────────────── */}
           <Route path="/positions" element={<ProtectedRoute><PositionsPage /></ProtectedRoute>} />
 
-          {/* ── Manage Columns ─────────────────────────────────────────────── */}
-          <Route path="/manage-columns"       element={<ProtectedRoute><ManageColumnsPage /></ProtectedRoute>} />
-          <Route path="/manage-columns/:page" element={<ProtectedRoute><SchemaEditorPage /></ProtectedRoute>} />
+        
 
           {/* ── Performance ────────────────────────────────────────────────── */}
           <Route path="/performance" element={<ProtectedRoute><PerformancePage /></ProtectedRoute>} />

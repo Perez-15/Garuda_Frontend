@@ -20,4 +20,19 @@ export const positionService = {
     const response = await apiClient.delete(`/positions/${id}`);
     return response.data;
   },
+
+  getTrashed: async (params = {}) => {
+  const response = await apiClient.get('/positions/trashed', { params });
+  return response.data;
+},
+
+restore: async (id) => {
+  const response = await apiClient.patch(`/positions/${id}/restore`);
+  return response.data;
+},
+
+forceDelete: async (id) => {
+  const response = await apiClient.delete(`/positions/${id}/force-delete`);
+  return response.data;
+},
 };

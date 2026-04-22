@@ -1,44 +1,82 @@
 // pages/Reports/ReportsPage.jsx
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   Download, TrendingUp, Users, CheckCircle,
-  Briefcase, Calendar, Building2, Trophy, Star, Award,
+  Briefcase, Calendar, Building2, Trophy,
 } from 'lucide-react';
+import {
+  Chart as ChartJS,
+  CategoryScale, LinearScale, BarElement, LineElement,
+  PointElement, ArcElement, Filler, Tooltip, Legend,
+} from 'chart.js';
+import { Bar, Line, Doughnut } from 'react-chartjs-2';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import { reportService } from '../../services/reportService';
 import { clientService } from '../../services/clientService';
 import { branchService } from '../../services/branchService';
 
+ChartJS.register(
+  CategoryScale, LinearScale, BarElement, LineElement,
+  PointElement, ArcElement, Filler, Tooltip, Legend,
+);
+
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 function getLastDayOfMonth(year, month) {
-  // month is 0-based
   return new Date(year, month + 1, 0).getDate();
 }
 
+// Use local date parts to avoid UTC timezone shift (important for UTC+8 PH)
+function toLocalIso(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
 function todayIso() {
-  return new Date().toISOString().split('T')[0];
+  return toLocalIso(new Date());
+}
+
+// ─── Shared chart defaults ─────────────────────────────────────────────────────
+const CHART_FONT = "'Inter', system-ui, sans-serif";
+
+function chartDefaults(dark) {
+  return {
+    textColor:  dark ? '#9ca3af' : '#6b7280',
+    gridColor:  dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)',
+    borderColor: dark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)',
+  };
 }
 
 // ─── KPI Card ──────────────────────────────────────────────────────────────────
-function KpiCard({ label, value, sub, color, icon: Icon }) {
+function KpiCard({ label, value, sub, trendUp, color, icon: Icon }) {
   const palette = {
-    blue:   { border: 'border-blue-500',   bg: 'bg-blue-50',   icon: 'text-blue-500',   val: 'text-blue-700'   },
-    green:  { border: 'border-green-500',  bg: 'bg-green-50',  icon: 'text-green-500',  val: 'text-green-700'  },
-    yellow: { border: 'border-yellow-500', bg: 'bg-yellow-50', icon: 'text-yellow-500', val: 'text-yellow-700' },
-    purple: { border: 'border-purple-500', bg: 'bg-purple-50', icon: 'text-purple-500', val: 'text-purple-700' },
-    amber:  { border: 'border-amber-500',  bg: 'bg-amber-50',  icon: 'text-amber-500',  val: 'text-amber-700'  },
+    blue:   { accent: '#3b82f6', bg: 'bg-blue-50',   icon: 'text-blue-500',   val: 'text-blue-700'   },
+    green:  { accent: '#22c55e', bg: 'bg-green-50',  icon: 'text-green-500',  val: 'text-green-700'  },
+    yellow: { accent: '#eab308', bg: 'bg-yellow-50', icon: 'text-yellow-500', val: 'text-yellow-700' },
+    purple: { accent: '#a855f7', bg: 'bg-purple-50', icon: 'text-purple-500', val: 'text-purple-700' },
+    amber:  { accent: '#f59e0b', bg: 'bg-amber-50',  icon: 'text-amber-500',  val: 'text-amber-700'  },
   };
   const p = palette[color] || palette.blue;
   return (
-    <div className={`bg-white rounded-xl shadow-sm border-t-4 ${p.border} p-5 hover:shadow-md transition-shadow`}>
-      <div className="flex items-start justify-between">
-        <div>
-          <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-1">{label}</p>
-          <p className={`text-3xl font-bold ${p.val}`}>{value}</p>
-          {sub && <p className="text-xs text-gray-400 mt-1">{sub}</p>}
-        </div>
-        <div className={`${p.bg} p-2.5 rounded-lg`}>
-          <Icon className={`h-5 w-5 ${p.icon}`} />
+    <div className="bg-white rounded-xl shadow-sm overflow-hidden relative">
+      <div className="h-1 w-full" style={{ background: p.accent }} />
+      <div className="p-5">
+        <div className="flex items-start justify-between">
+          <div>
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-1">{label}</p>
+            <p className={`text-3xl font-bold ${p.val}`}>{value}</p>
+            {sub && (
+              <p className={`text-xs mt-1 font-medium ${
+                trendUp === true  ? 'text-green-500' :
+                trendUp === false ? 'text-red-400'   : 'text-gray-400'
+              }`}>
+                {trendUp === true ? '↑ ' : trendUp === false ? '↓ ' : ''}{sub}
+              </p>
+            )}
+          </div>
+          <div className={`${p.bg} p-2.5 rounded-lg`}>
+            <Icon className={`h-5 w-5 ${p.icon}`} />
+          </div>
         </div>
       </div>
     </div>
@@ -46,199 +84,17 @@ function KpiCard({ label, value, sub, color, icon: Icon }) {
 }
 
 // ─── Section Card ──────────────────────────────────────────────────────────────
-function SectionCard({ title, icon: Icon, iconColor = 'text-gray-500', children, action }) {
+function SectionCard({ title, dot, children, action }) {
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
       <div className="px-6 py-4 border-b border-gray-50 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <Icon className={`h-5 w-5 ${iconColor}`} />
-          <h3 className="text-sm font-bold text-gray-800 uppercase tracking-wide">{title}</h3>
+          {dot && <span className="w-2 h-2 rounded-full inline-block" style={{ background: dot }} />}
+          <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest">{title}</h3>
         </div>
         {action}
       </div>
       <div className="p-6">{children}</div>
-    </div>
-  );
-}
-
-// ─── Horizontal Bar ────────────────────────────────────────────────────────────
-function HBar({ label, count, total, color = 'bg-blue-500', rank }) {
-  const pct = total > 0 ? ((count / total) * 100).toFixed(1) : 0;
-  return (
-    <div className="flex items-center gap-3">
-      {rank !== undefined && (
-        <span className="w-5 text-xs font-bold text-gray-300 text-right flex-shrink-0">#{rank}</span>
-      )}
-      <div className="flex-1 min-w-0">
-        <div className="flex justify-between items-center mb-1">
-          <span className="text-sm font-medium text-gray-700 truncate">{label}</span>
-          <span className="text-xs font-bold text-gray-500 ml-2 flex-shrink-0">
-            {count} <span className="text-gray-300">({pct}%)</span>
-          </span>
-        </div>
-        <div className="h-2.5 bg-gray-100 rounded-full overflow-hidden">
-          <div
-            className={`h-full ${color} rounded-full transition-all duration-700`}
-            style={{ width: `${pct}%` }}
-          />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─── CSS Funnel ────────────────────────────────────────────────────────────────
-// Pure CSS trapezoid funnel — no chart library needed
-function FunnelViz({ stages }) {
-  const max = Math.max(...stages.map((s) => s.value), 1);
-  const colors = ['bg-blue-500', 'bg-yellow-400', 'bg-amber-400', 'bg-green-500'];
-  const textColors = ['text-blue-700', 'text-yellow-700', 'text-amber-700', 'text-green-700'];
-  const bgColors   = ['bg-blue-50',   'bg-yellow-50',    'bg-amber-50',    'bg-green-50'   ];
-
-  return (
-    <div className="space-y-2">
-      {stages.map((stage, i) => {
-        const widthPct = max > 0 ? (stage.value / max) * 100 : 0;
-        const convPct  = i > 0 && stages[i - 1].value > 0
-          ? ((stage.value / stages[i - 1].value) * 100).toFixed(0)
-          : null;
-        return (
-          <div key={stage.name} className="space-y-1">
-            {/* Drop arrow between stages */}
-            {i > 0 && (
-              <div className="flex items-center justify-center gap-2 py-0.5">
-                <span className="text-gray-300 text-xs">▼</span>
-                {convPct && (
-                  <span className="text-xs text-gray-400 font-medium">{convPct}% passed through</span>
-                )}
-              </div>
-            )}
-            {/* Funnel bar — centered, narrows as value decreases */}
-            <div className="flex items-center justify-center">
-              <div
-                className={`${bgColors[i % bgColors.length]} rounded-lg px-4 py-3 flex items-center justify-between transition-all duration-700`}
-                style={{ width: `${Math.max(widthPct, 20)}%`, minWidth: '180px' }}
-              >
-                <span className={`text-xs font-semibold ${textColors[i % textColors.length]} truncate`}>
-                  {stage.name}
-                </span>
-                <span className={`text-lg font-black ${textColors[i % textColors.length]} ml-3 flex-shrink-0`}>
-                  {stage.value}
-                </span>
-              </div>
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-// ─── CSS Bar Chart (trend) ─────────────────────────────────────────────────────
-// Pure CSS grouped bar chart — no chart library needed
-function TrendBarChart({ data }) {
-  if (!data?.length) return (
-    <p className="text-gray-400 text-center py-8 text-sm">No trend data for this period</p>
-  );
-
-  const maxVal = Math.max(...data.flatMap((d) => [d.applicants || 0, d.hired || 0]), 1);
-
-  return (
-    <div className="space-y-1">
-      {/* Bars */}
-      <div className="flex items-end gap-1 h-48 px-2">
-        {data.map((d, i) => {
-          const appH  = ((d.applicants || 0) / maxVal) * 100;
-          const hirH  = ((d.hired      || 0) / maxVal) * 100;
-          return (
-            <div key={i} className="flex-1 flex items-end gap-0.5 group relative">
-              {/* Tooltip */}
-              <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-xs rounded-lg px-2 py-1.5 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-10 pointer-events-none">
-                <p className="font-semibold">{d.date}</p>
-                <p>Applicants: <span className="text-blue-300">{d.applicants}</span></p>
-                <p>Hired: <span className="text-green-300">{d.hired}</span></p>
-              </div>
-              <div
-                className="flex-1 bg-blue-400 rounded-t-sm transition-all duration-500"
-                style={{ height: `${appH}%` }}
-              />
-              <div
-                className="flex-1 bg-green-400 rounded-t-sm transition-all duration-500"
-                style={{ height: `${hirH}%` }}
-              />
-            </div>
-          );
-        })}
-      </div>
-      {/* X-axis labels — show every Nth to avoid crowding */}
-      <div className="flex gap-1 px-2">
-        {data.map((d, i) => (
-          <div key={i} className="flex-1 text-center">
-            {(i === 0 || i === Math.floor(data.length / 2) || i === data.length - 1) && (
-              <span className="text-xs text-gray-400">{d.date}</span>
-            )}
-          </div>
-        ))}
-      </div>
-      {/* Legend */}
-      <div className="flex items-center gap-4 justify-center pt-2">
-        <span className="flex items-center gap-1.5 text-xs text-gray-500">
-          <span className="w-3 h-3 rounded-sm bg-blue-400 inline-block" /> Applicants
-        </span>
-        <span className="flex items-center gap-1.5 text-xs text-gray-500">
-          <span className="w-3 h-3 rounded-sm bg-green-400 inline-block" /> Hired
-        </span>
-      </div>
-    </div>
-  );
-}
-
-// ─── Recruiter Row ─────────────────────────────────────────────────────────────
-function RecruiterRow({ recruiter, rank, maxAdded }) {
-  const rankConfig = {
-    1: { bg: 'bg-yellow-400', text: 'text-white', icon: Trophy },
-    2: { bg: 'bg-gray-300',   text: 'text-white', icon: Award  },
-    3: { bg: 'bg-orange-400', text: 'text-white', icon: Star   },
-  };
-  const rc       = rankConfig[rank] || { bg: 'bg-gray-100', text: 'text-gray-500', icon: Users };
-  const RankIcon = rc.icon;
-  const barPct   = maxAdded > 0 ? ((recruiter.total_added / maxAdded) * 100).toFixed(0) : 0;
-  const initials = recruiter.name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2);
-
-  return (
-    <div className="flex items-center gap-4 p-3 rounded-xl hover:bg-gray-50 transition-colors">
-      <div className={`w-7 h-7 rounded-full ${rc.bg} ${rc.text} flex items-center justify-center flex-shrink-0 text-xs font-bold`}>
-        {rank <= 3 ? <RankIcon className="h-3.5 w-3.5" /> : rank}
-      </div>
-      <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center flex-shrink-0">
-        <span className="text-white text-xs font-bold">{initials}</span>
-      </div>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center justify-between mb-1">
-          <p className="text-sm font-semibold text-gray-800 truncate">{recruiter.name}</p>
-          <div className="flex items-center gap-3 flex-shrink-0 ml-2">
-            <span className="text-xs text-gray-400">
-              <span className="font-bold text-gray-700">{recruiter.total_added}</span> added
-            </span>
-            <span className="text-xs text-gray-400">
-              <span className="font-bold text-green-600">{recruiter.total_hired}</span> hired
-            </span>
-            <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
-              recruiter.conversion_rate >= 30 ? 'bg-green-50 text-green-700'
-              : recruiter.conversion_rate >= 15 ? 'bg-yellow-50 text-yellow-700'
-              : 'bg-gray-100 text-gray-500'
-            }`}>
-              {recruiter.conversion_rate}%
-            </span>
-          </div>
-        </div>
-        <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-          <div
-            className="h-full bg-gradient-to-r from-blue-400 to-indigo-500 rounded-full transition-all duration-700"
-            style={{ width: `${barPct}%` }}
-          />
-        </div>
-      </div>
     </div>
   );
 }
@@ -257,7 +113,6 @@ function PresetBtn({ label, active, onClick }) {
   );
 }
 
-// ─── Cutoff Pill ───────────────────────────────────────────────────────────────
 function CutoffPill({ label, active, onClick }) {
   return (
     <button
@@ -273,6 +128,97 @@ function CutoffPill({ label, active, onClick }) {
   );
 }
 
+// ─── Recruiter Row ─────────────────────────────────────────────────────────────
+function RecruiterRow({ recruiter, rank, maxAdded }) {
+  const medals = { 1: '🏆', 2: '🥈', 3: '🥉' };
+  const rankBg  = rank === 1 ? 'bg-yellow-400 text-white' : rank === 2 ? 'bg-gray-300 text-gray-700' : rank === 3 ? 'bg-orange-400 text-white' : 'bg-gray-100 text-gray-500';
+  const barPct  = maxAdded > 0 ? Math.round((parseInt(recruiter.total_added) / maxAdded) * 100) : 0;
+  const initials = recruiter.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+  const rateCls = recruiter.conversion_rate >= 22 ? 'bg-green-50 text-green-700' : recruiter.conversion_rate >= 15 ? 'bg-yellow-50 text-yellow-700' : 'bg-gray-100 text-gray-500';
+
+  return (
+    <div className="flex items-center gap-3 py-2.5 border-b border-gray-50 last:border-0">
+      <div className={`w-7 h-7 rounded-full ${rankBg} flex items-center justify-center flex-shrink-0 text-xs font-bold`}>
+        {rank <= 3 ? medals[rank] : rank}
+      </div>
+      <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center flex-shrink-0">
+        <span className="text-white text-xs font-bold">{initials}</span>
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center justify-between mb-1">
+          <p className="text-sm font-semibold text-gray-800 truncate">{recruiter.name}</p>
+          <div className="flex items-center gap-3 flex-shrink-0 ml-2">
+            <span className="text-xs text-gray-400">
+              <span className="font-bold text-gray-700">{recruiter.total_added}</span> added
+            </span>
+            <span className="text-xs text-gray-400">
+              <span className="font-bold text-green-600">{recruiter.total_hired}</span> hired
+            </span>
+            <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${rateCls}`}>
+              {recruiter.conversion_rate}%
+            </span>
+          </div>
+        </div>
+        <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+          <div
+            className="h-full bg-gradient-to-r from-blue-400 to-indigo-500 rounded-full transition-all duration-700"
+            style={{ width: `${barPct}%` }}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Funnel (CSS) ──────────────────────────────────────────────────────────────
+// Kept as CSS — Chart.js has no native funnel chart without extra plugins
+function FunnelViz({ stages }) {
+  const max = Math.max(...stages.map(s => s.value), 1);
+  const colors = [
+    { bg: '#eff6ff', border: '#bfdbfe', text: '#1e40af' },
+    { bg: '#fefce8', border: '#fde68a', text: '#92400e' },
+    { bg: '#fff7ed', border: '#fed7aa', text: '#9a3412' },
+    { bg: '#f0fdf4', border: '#bbf7d0', text: '#14532d' },
+  ];
+  return (
+    <div className="space-y-1.5">
+      {stages.map((stage, i) => {
+        const widthPct = Math.max((stage.value / max) * 100, 22);
+        const convPct  = i > 0 && stages[i - 1].value > 0
+          ? Math.round((stage.value / stages[i - 1].value) * 100)
+          : null;
+        const c = colors[i % colors.length];
+        return (
+          <div key={stage.name}>
+            {i > 0 && (
+              <div className="flex items-center justify-center gap-1.5 py-1">
+                <span className="text-gray-300 text-xs">▼</span>
+                {convPct !== null && (
+                  <span className="text-xs text-gray-400 font-medium">{convPct}% passed through</span>
+                )}
+              </div>
+            )}
+            <div className="flex justify-center">
+              <div
+                className="flex items-center justify-between px-4 py-2.5 rounded-lg transition-all duration-700"
+                style={{
+                  width: `${widthPct}%`,
+                  minWidth: '200px',
+                  background: c.bg,
+                  border: `1px solid ${c.border}`,
+                }}
+              >
+                <span className="text-xs font-semibold truncate" style={{ color: c.text }}>{stage.name}</span>
+                <span className="text-base font-bold ml-3 flex-shrink-0" style={{ color: c.text }}>{stage.value.toLocaleString()}</span>
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ─── Main Page ─────────────────────────────────────────────────────────────────
 export default function ReportsPage() {
   const [loading, setLoading]           = useState(true);
@@ -280,7 +226,6 @@ export default function ReportsPage() {
   const [dateRange, setDateRange]       = useState({ start_date: '', end_date: '' });
   const [filters, setFilters]           = useState({ client_id: '', branch_id: '' });
 
-  // Cutoff
   const now          = new Date();
   const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   const [cutoffMonth, setCutoffMonth] = useState(currentMonth);
@@ -295,6 +240,17 @@ export default function ReportsPage() {
   const [clients,  setClients]  = useState([]);
   const [branches, setBranches] = useState([]);
 
+  // Detect dark mode
+  const [dark, setDark] = useState(() => window.matchMedia('(prefers-color-scheme: dark)').matches);
+  useEffect(() => {
+    const mq = window.matchMedia('(prefers-color-scheme: dark)');
+    const handler = e => setDark(e.matches);
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
+
+  const cd = chartDefaults(dark);
+
   useEffect(() => {
     fetchFilterOptions();
     applyPreset('this_month');
@@ -305,7 +261,6 @@ export default function ReportsPage() {
     fetchAllReports();
   }, [dateRange, filters]);
 
-  // ── Filter options ─────────────────────────────────────────────────────────
   const fetchFilterOptions = async () => {
     try {
       const [clientsRes, branchesRes] = await Promise.all([
@@ -317,66 +272,46 @@ export default function ReportsPage() {
     } catch (e) { console.error(e); }
   };
 
-  // ── Date presets ───────────────────────────────────────────────────────────
   const applyPreset = (preset) => {
     setActivePreset(preset);
+    if (preset === 'custom') return;
     const today = new Date();
     let start = '', end = todayIso();
-
-    if (preset === 'today') {
-      start = end = todayIso();
-    } else if (preset === 'this_week') {
-      const s = new Date(today);
-      s.setDate(today.getDate() - today.getDay());
-      start = s.toISOString().split('T')[0];
-    } else if (preset === 'this_month') {
-      start = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0];
-    } else if (preset === 'this_year') {
-      start = new Date(today.getFullYear(), 0, 1).toISOString().split('T')[0];
-    } else if (preset === 'custom') {
-      return;
-    }
-
+    if      (preset === 'today')      { start = end = todayIso(); }
+    else if (preset === 'this_week')  { const s = new Date(today); s.setDate(today.getDate() - today.getDay()); start = toLocalIso(s); }
+    else if (preset === 'this_month') { start = toLocalIso(new Date(today.getFullYear(), today.getMonth(), 1)); }
+    else if (preset === 'this_year')  { start = toLocalIso(new Date(today.getFullYear(), 0, 1)); }
+    else if (preset === 'all_time')   { start = '2000-01-01'; }
     setDateRange({ start_date: start, end_date: end });
   };
 
-  // ── Apply cutoff ───────────────────────────────────────────────────────────
   const applyCutoff = (month, half) => {
     setActivePreset('cutoff');
     setCutoffMonth(month);
     setCutoffHalf(half);
     const [year, mon] = month.split('-').map(Number);
-    const lastDay     = getLastDayOfMonth(year, mon - 1);
-    const start       = half === 1 ? `${month}-01` : `${month}-16`;
-    const end         = half === 1 ? `${month}-15` : `${month}-${String(lastDay).padStart(2, '0')}`;
+    const lastDay = getLastDayOfMonth(year, mon - 1);
+    const start   = half === 1 ? `${month}-01` : `${month}-16`;
+    const end     = half === 1 ? `${month}-15` : `${month}-${String(lastDay).padStart(2, '0')}`;
     setDateRange({ start_date: start, end_date: end });
   };
 
-  // ── Fetch reports ──────────────────────────────────────────────────────────
   const fetchAllReports = async () => {
     try {
       setLoading(true);
       const params = { ...dateRange, ...filters };
-
-      const [sourceRes, statusRes, branchRes, recruitersRes] = await Promise.all([
+      const [sourceRes, statusRes, branchRes, recruitersRes, trendRes] = await Promise.all([
         reportService.applicantsBySource(params),
         reportService.applicantsByStatus(params),
         reportService.applicantsByBranch(params),
         reportService.topRecruiters(params),
+        reportService.applicantsTrend(params),
       ]);
-
-      setSourceData(sourceRes.data       || []);
-      setStatusData(statusRes.data       || []);
-      setBranchData(branchRes.data       || []);
+      setSourceData(sourceRes.data         || []);
+      setStatusData(statusRes.data         || []);
+      setBranchData(branchRes.data         || []);
       setRecruitersData(recruitersRes.data || []);
-
-      // Trend is optional — only call if the service method exists
-      if (typeof reportService.applicantsTrend === 'function') {
-        try {
-          const trendRes = await reportService.applicantsTrend(params);
-          setTrendData(trendRes.data || []);
-        } catch { setTrendData([]); }
-      }
+      setTrendData(trendRes.data           || []);
     } catch (e) {
       console.error(e);
     } finally {
@@ -384,7 +319,6 @@ export default function ReportsPage() {
     }
   };
 
-  // ── Export PDF ─────────────────────────────────────────────────────────────
   const handleExport = async () => {
     try {
       const response = await reportService.export({ ...dateRange, ...filters });
@@ -399,57 +333,194 @@ export default function ReportsPage() {
     } catch (e) { console.error(e); }
   };
 
-  // ── Derived metrics ────────────────────────────────────────────────────────
+  // ── Derived metrics ──────────────────────────────────────────────────────────
   const totalApplicants = sourceData.reduce((s, i) => s + parseInt(i.count || 0), 0);
-  const hired   = parseInt(statusData.find((s) => s.status === 'hired')?.count   || 0);
-  const active  = parseInt(statusData.find((s) => s.status === 'active')?.count  || 0);
-  const pooling = parseInt(statusData.find((s) => s.status === 'pooling')?.count || 0);
+  const hired     = parseInt(statusData.find(s => s.status === 'hired')?.count     || 0);
+  const active    = parseInt(statusData.find(s => s.status === 'active')?.count    || 0);
+  const pooling   = parseInt(statusData.find(s => s.status === 'pooling')?.count   || 0);
+  const withdrawn = parseInt(statusData.find(s => s.status === 'withdrawn')?.count || 0);
+  const conversionRate = totalApplicants > 0 ? ((hired / totalApplicants) * 100).toFixed(1) : '0.0';
+  const maxAdded = Math.max(...recruitersData.map(r => parseInt(r.total_added || 0)), 1);
 
-  const conversionRate = totalApplicants > 0
-    ? ((hired / totalApplicants) * 100).toFixed(1) : '0.0';
+  // ── Chart data ───────────────────────────────────────────────────────────────
 
-  const maxAdded = Math.max(...recruitersData.map((r) => parseInt(r.total_added || 0)), 1);
+  // Line chart — applicants over time
+  const trendChartData = {
+    labels:   trendData.map(d => d.date),
+    datasets: [
+      {
+        label: 'Applicants',
+        data:  trendData.map(d => d.applicants || 0),
+        borderColor: '#3b82f6',
+        backgroundColor: 'rgba(59,130,246,0.08)',
+        borderWidth: 2,
+        pointBackgroundColor: '#3b82f6',
+        pointRadius: 3,
+        pointHoverRadius: 5,
+        fill: true,
+        tension: 0.4,
+        borderDash: [],
+      },
+      {
+        label: 'Hired',
+        data:  trendData.map(d => d.hired || 0),
+        borderColor: '#22c55e',
+        backgroundColor: 'rgba(34,197,94,0.06)',
+        borderWidth: 2,
+        pointBackgroundColor: '#22c55e',
+        pointRadius: 3,
+        pointHoverRadius: 5,
+        fill: true,
+        tension: 0.4,
+        borderDash: [4, 3],
+      },
+    ],
+  };
 
-  const sourceColors = [
-    'bg-blue-500', 'bg-indigo-500', 'bg-violet-500',
-    'bg-sky-500',  'bg-cyan-500',   'bg-teal-500',
-  ];
+  const trendChartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: { mode: 'index', intersect: false },
+    },
+    scales: {
+      x: {
+        grid: { color: cd.gridColor },
+        ticks: { color: cd.textColor, font: { family: CHART_FONT, size: 11 } },
+      },
+      y: {
+        grid: { color: cd.gridColor },
+        ticks: { color: cd.textColor, font: { family: CHART_FONT, size: 11 } },
+        beginAtZero: true,
+      },
+    },
+  };
 
-  // Status display — rejected excluded
-  const SHOWN_STATUSES = ['active', 'hired', 'pooling', 'withdrawn'];
-  const filteredStatusData = statusData.filter((s) => SHOWN_STATUSES.includes(s.status));
+  // Donut chart — status breakdown
+  const donutData = {
+    labels: ['In-process', 'Pooling', 'Hired', 'Withdrawn'],
+    datasets: [{
+      data: [active, pooling, hired, withdrawn],
+      backgroundColor: ['#eab308', '#f59e0b', '#22c55e', '#94a3b8'],
+      borderWidth: 0,
+      hoverOffset: 4,
+    }],
+  };
+  const donutOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    cutout: '68%',
+    plugins: {
+      legend: { display: false },
+      tooltip: { callbacks: { label: ctx => `${ctx.label}: ${ctx.parsed}` } },
+    },
+  };
 
-  const statusPillMap = {
-    active:    'bg-yellow-50 text-yellow-700 border-yellow-200',
-    hired:     'bg-green-50 text-green-700 border-green-200',
-    withdrawn: 'bg-gray-50 text-gray-600 border-gray-200',
-    pooling:   'bg-amber-50 text-amber-700 border-amber-200',
+  // Horizontal bar chart — source
+  const sortedSource = [...sourceData].sort((a, b) => b.count - a.count);
+  const sourceColors = ['#6366f1','#818cf8','#a5b4fc','#c7d2fe','#e0e7ff','#eef2ff'];
+  const sourceChartData = {
+    labels: sortedSource.map(s => s.source || 'Unknown'),
+    datasets: [{
+      label: 'Applicants',
+      data:  sortedSource.map(s => parseInt(s.count)),
+      backgroundColor: sortedSource.map((_, i) => sourceColors[i % sourceColors.length]),
+      borderRadius: 4,
+      borderSkipped: false,
+    }],
+  };
+  const sourceChartOptions = {
+    indexAxis: 'y',
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: { callbacks: { label: ctx => `${ctx.parsed.x} applicants` } },
+    },
+    scales: {
+      x: {
+        grid: { color: cd.gridColor },
+        ticks: { color: cd.textColor, font: { family: CHART_FONT, size: 11 } },
+        beginAtZero: true,
+      },
+      y: {
+        grid: { display: false },
+        ticks: { color: cd.textColor, font: { family: CHART_FONT, size: 11 } },
+      },
+    },
+  };
+
+  // Grouped bar chart — branch performance
+  const sortedBranch = [...branchData].sort((a, b) => b.count - a.count).slice(0, 8);
+  const branchChartData = {
+    labels: sortedBranch.map(b => b.branch_name),
+    datasets: [
+      {
+        label: 'Applicants',
+        data:  sortedBranch.map(b => parseInt(b.count)),
+        backgroundColor: '#8b5cf6',
+        borderRadius: 4,
+        borderSkipped: false,
+      },
+      // NOTE: Add hired-per-branch to the backend applicantsByBranch() response
+      // to populate this dataset. For now it renders with just applicants.
+      // {
+      //   label: 'Hired',
+      //   data: sortedBranch.map(b => parseInt(b.hired || 0)),
+      //   backgroundColor: '#c4b5fd',
+      //   borderRadius: 4,
+      //   borderSkipped: false,
+      // },
+    ],
+  };
+  const branchChartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: { mode: 'index' },
+    },
+    scales: {
+      x: {
+        grid: { display: false },
+        ticks: {
+          color: cd.textColor,
+          font: { family: CHART_FONT, size: 11 },
+          autoSkip: false,
+          maxRotation: 30,
+        },
+      },
+      y: {
+        grid: { color: cd.gridColor },
+        ticks: { color: cd.textColor, font: { family: CHART_FONT, size: 11 } },
+        beginAtZero: true,
+      },
+    },
   };
 
   // Funnel stages
   const funnelStages = [
-    { name: 'Total Applicants', value: totalApplicants },
-    { name: 'In-Process',       value: active          },
+    { name: 'Total applicants', value: totalApplicants },
+    { name: 'In-process',       value: active          },
     { name: 'Pooling',          value: pooling         },
     { name: 'Hired',            value: hired           },
-  ].filter((s) => s.value > 0);
+  ].filter(s => s.value > 0);
 
-  // Cutoff last day for pill label
   const [cmYear, cmMon] = cutoffMonth.split('-').map(Number);
   const cutoffLastDay   = getLastDayOfMonth(cmYear, cmMon - 1);
+  const periodLabel     = dateRange.start_date && dateRange.end_date
+    ? `${dateRange.start_date} → ${dateRange.end_date}` : '—';
 
-  const periodLabel = dateRange.start_date && dateRange.end_date
-    ? `${dateRange.start_date} → ${dateRange.end_date}`
-    : '—';
-
+  // ── Render ───────────────────────────────────────────────────────────────────
   return (
     <DashboardLayout>
       <div className="space-y-6">
 
-        {/* ── Header ──────────────────────────────────────────────────────── */}
+        {/* Header */}
         <div className="flex justify-between items-start">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Reports & Analytics</h1>
+            <h1 className="text-2xl font-bold text-gray-900">Reports &amp; analytics</h1>
             <p className="text-gray-500 text-sm mt-0.5">
               Recruitment insights ·{' '}
               <span className="font-medium text-gray-700">{periodLabel}</span>
@@ -464,35 +535,30 @@ export default function ReportsPage() {
           </button>
         </div>
 
-        {/* ── Filters ─────────────────────────────────────────────────────── */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 space-y-4">
-
-          {/* Preset row */}
+        {/* Filters — single row */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 px-5 py-3">
           <div className="flex items-center gap-2 flex-wrap">
-            <Calendar className="h-4 w-4 text-gray-400 flex-shrink-0" />
-            <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide mr-1">Period:</span>
+
+            {/* Period presets */}
+            <Calendar className="h-4 w-4 text-gray-300 flex-shrink-0" />
             {[
               { key: 'today',      label: 'Today'      },
-              { key: 'this_week',  label: 'This Week'  },
-              { key: 'this_month', label: 'This Month' },
-              { key: 'this_year',  label: 'This Year'  },
-              { key: 'custom',     label: 'Custom'     },
-            ].map((p) => (
-              <PresetBtn
-                key={p.key}
-                label={p.label}
-                active={activePreset === p.key}
-                onClick={() => applyPreset(p.key)}
-              />
+              { key: 'this_week',  label: 'This week'  },
+              { key: 'this_month', label: 'This month' },
+              { key: 'this_year',  label: 'This year'  },
+              { key: 'all_time',   label: 'All time'   },
+            ].map(p => (
+              <PresetBtn key={p.key} label={p.label} active={activePreset === p.key} onClick={() => applyPreset(p.key)} />
             ))}
 
-            {/* Cutoff section */}
-            <span className="text-gray-200 mx-1 select-none">|</span>
+            <span className="text-gray-200 mx-0.5 select-none">|</span>
+
+            {/* Cutoff */}
             <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Cutoff:</span>
             <input
               type="month"
               value={cutoffMonth}
-              onChange={(e) => applyCutoff(e.target.value, cutoffHalf)}
+              onChange={e => applyCutoff(e.target.value, cutoffHalf)}
               className="text-xs border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-500"
             />
             <CutoffPill
@@ -505,51 +571,45 @@ export default function ReportsPage() {
               active={activePreset === 'cutoff' && cutoffHalf === 2}
               onClick={() => applyCutoff(cutoffMonth, 2)}
             />
-          </div>
 
-          {/* Date + dropdowns row */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-            <input
-              type="date"
-              value={dateRange.start_date}
-              onChange={(e) => { setActivePreset('custom'); setDateRange({ ...dateRange, start_date: e.target.value }); }}
-              className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
-            <input
-              type="date"
-              value={dateRange.end_date}
-              onChange={(e) => { setActivePreset('custom'); setDateRange({ ...dateRange, end_date: e.target.value }); }}
-              className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
+            <span className="text-gray-200 mx-0.5 select-none">|</span>
+
+            {/* Client + Branch dropdowns */}
             <select
               value={filters.client_id}
-              onChange={(e) => setFilters({ ...filters, client_id: e.target.value })}
-              className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+              onChange={e => setFilters({ ...filters, client_id: e.target.value })}
+              className="px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:ring-2 focus:ring-blue-500 text-gray-600"
             >
-              <option value="">All Clients</option>
-              {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              <option value="">All clients</option>
+              {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
             <select
               value={filters.branch_id}
-              onChange={(e) => setFilters({ ...filters, branch_id: e.target.value })}
-              className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+              onChange={e => setFilters({ ...filters, branch_id: e.target.value })}
+              className="px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:ring-2 focus:ring-blue-500 text-gray-600"
             >
-              <option value="">All Branches</option>
-              {branches.map((b) => <option key={b.id} value={b.id}>{b.branch_name}</option>)}
+              <option value="">All branches</option>
+              {branches.map(b => <option key={b.id} value={b.id}>{b.branch_name}</option>)}
             </select>
-          </div>
 
-          {(filters.client_id || filters.branch_id) && (
-            <button
-              onClick={() => setFilters({ client_id: '', branch_id: '' })}
-              className="text-xs text-red-500 hover:text-red-700 font-medium"
-            >
-              × Clear all filters
-            </button>
-          )}
+            {/* Clear filters */}
+            {(filters.client_id || filters.branch_id) && (
+              <button
+                onClick={() => setFilters({ client_id: '', branch_id: '' })}
+                className="text-xs text-red-400 hover:text-red-600 font-medium ml-1"
+              >
+                × Clear
+              </button>
+            )}
+
+            {/* Active period label — right side */}
+            <span className="ml-auto text-xs text-gray-400 font-medium hidden md:block">
+              {periodLabel}
+            </span>
+          </div>
         </div>
 
-        {/* ── Loading skeleton ─────────────────────────────────────────────── */}
+        {/* Loading skeleton */}
         {loading ? (
           <div className="space-y-4 animate-pulse">
             <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
@@ -563,124 +623,126 @@ export default function ReportsPage() {
           </div>
         ) : (
           <>
-            {/* ── KPI Cards ──────────────────────────────────────────────── */}
+            {/* KPI Cards */}
             <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-              <KpiCard label="Total Applicants" value={totalApplicants}      icon={Users}       color="blue"   sub="In selected period"                     />
-              <KpiCard label="Hired"            value={hired}                icon={CheckCircle} color="green"  sub="Successfully placed"                    />
-              <KpiCard label="In-Process"       value={active}               icon={Briefcase}   color="yellow" sub="Active in pipeline"                     />
-              <KpiCard label="Pooling"          value={pooling}              icon={Users}       color="amber"  sub="In talent pool"                         />
-              <KpiCard label="Conversion Rate"  value={`${conversionRate}%`} icon={TrendingUp}  color="purple" sub={`${hired} hired of ${totalApplicants}`} />
+              <KpiCard label="Total applicants" value={totalApplicants.toLocaleString()} icon={Users}       color="blue"   sub="In selected period"                    />
+              <KpiCard label="Hired"            value={hired}                            icon={CheckCircle} color="green"  sub="Successfully placed"                   />
+              <KpiCard label="In-process"       value={active}                           icon={Briefcase}   color="yellow" sub="Active in pipeline"                    />
+              <KpiCard label="Pooling"          value={pooling}                          icon={Users}       color="amber"  sub="In talent pool"                        />
+              <KpiCard label="Conversion rate"  value={`${conversionRate}%`}             icon={TrendingUp}  color="purple" sub={`${hired} hired of ${totalApplicants}`} />
             </div>
 
-            {/* ── Trend Chart (only shown when data exists) ───────────────── */}
-            {trendData.length > 0 && (
-              <SectionCard title="Applicants Over Time" icon={TrendingUp} iconColor="text-blue-500">
-                <TrendBarChart data={trendData} />
-              </SectionCard>
-            )}
-
-            {/* ── Source + Funnel ─────────────────────────────────────────── */}
+            {/* Row 1: Trend line + Status donut */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
-              <SectionCard title="Applicants by Source" icon={TrendingUp} iconColor="text-blue-500">
+              {/* Trend line chart */}
+              {trendData.length > 0 ? (
+                <SectionCard title="Applicants over time" dot="#3b82f6"
+                  action={
+                    <div className="flex items-center gap-3 text-xs text-gray-400">
+                      <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-blue-400 inline-block" /> Applicants</span>
+                      <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-green-400 inline-block border-dashed border-t-2" /> Hired</span>
+                    </div>
+                  }
+                >
+                  <div style={{ height: 220 }}>
+                    <Line data={trendChartData} options={trendChartOptions} />
+                  </div>
+                </SectionCard>
+              ) : (
+                <SectionCard title="Applicants over time" dot="#3b82f6">
+                  <div className="flex items-center justify-center h-52 text-sm text-gray-400">
+                    Trend data unavailable — add <code className="mx-1 bg-gray-100 px-1 rounded text-xs">applicantsTrend()</code> to reportService
+                  </div>
+                </SectionCard>
+              )}
+
+              {/* Status donut */}
+              <SectionCard title="Status breakdown" dot="#a855f7">
+                <div className="flex items-center gap-6">
+                  <div style={{ height: 200, width: 200, flexShrink: 0 }}>
+                    <Doughnut data={donutData} options={donutOptions} />
+                  </div>
+                  <div className="flex flex-col gap-3 flex-1">
+                    {[
+                      { label: 'In-process', value: active,    color: '#eab308' },
+                      { label: 'Pooling',    value: pooling,   color: '#f59e0b' },
+                      { label: 'Hired',      value: hired,     color: '#22c55e' },
+                      { label: 'Withdrawn',  value: withdrawn, color: '#94a3b8' },
+                    ].map(item => (
+                      <div key={item.label} className="flex justify-between items-center text-sm">
+                        <span className="flex items-center gap-2">
+                          <span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ background: item.color }} />
+                          <span className="text-gray-600">{item.label}</span>
+                        </span>
+                        <strong className="text-gray-800">{item.value.toLocaleString()}</strong>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </SectionCard>
+            </div>
+
+            {/* Row 2: Source bar + Funnel */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+              {/* Horizontal bar — source */}
+              <SectionCard title="Applicants by source" dot="#6366f1">
                 {sourceData.length === 0 ? (
                   <p className="text-gray-400 text-center py-8 text-sm">No data for this period</p>
                 ) : (
-                  <div className="space-y-4">
-                    {[...sourceData]
-                      .sort((a, b) => b.count - a.count)
-                      .map((item, i) => (
-                        <HBar
-                          key={item.source}
-                          label={item.source || 'Unknown'}
-                          count={item.count}
-                          total={totalApplicants}
-                          color={sourceColors[i % sourceColors.length]}
-                          rank={i + 1}
-                        />
-                      ))}
+                  <div style={{ height: Math.max(sortedSource.length * 36 + 40, 180) }}>
+                    <Bar data={sourceChartData} options={sourceChartOptions} />
                   </div>
                 )}
               </SectionCard>
 
-              <SectionCard title="Recruitment Funnel" icon={CheckCircle} iconColor="text-green-500">
+              {/* Funnel — CSS (no Chart.js plugin needed) */}
+              <SectionCard title="Recruitment funnel" dot="#22c55e">
                 {funnelStages.length === 0 ? (
                   <p className="text-gray-400 text-center py-8 text-sm">No data for this period</p>
                 ) : (
-                  <>
-                    <FunnelViz stages={funnelStages} />
-                    {/* Status pills below funnel */}
-                    {filteredStatusData.length > 0 && (
-                      <div className="grid grid-cols-2 gap-2 mt-5 pt-4 border-t border-gray-50">
-                        {filteredStatusData.map((item) => (
-                          <div
-                            key={item.status}
-                            className={`flex justify-between items-center px-3 py-2 rounded-lg border text-xs font-semibold
-                              ${statusPillMap[item.status] || 'bg-gray-50 text-gray-600 border-gray-200'}`}
-                          >
-                            <span className="capitalize">{item.status}</span>
-                            <span className="text-base font-bold">{item.count}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </>
+                  <FunnelViz stages={funnelStages} />
                 )}
               </SectionCard>
             </div>
 
-            {/* ── Branch Performance ──────────────────────────────────────── */}
-            <SectionCard title="Branch Performance" icon={Building2} iconColor="text-purple-500">
+            {/* Branch performance — grouped bar (full width) */}
+            <SectionCard title="Branch performance" dot="#8b5cf6"
+              action={
+                <div className="flex items-center gap-3 text-xs text-gray-400">
+                  <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-violet-500 inline-block" /> Applicants</span>
+                  {/* Uncomment when backend returns hired-per-branch:
+                  <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-violet-300 inline-block" /> Hired</span>
+                  */}
+                </div>
+              }
+            >
               {branchData.length === 0 ? (
                 <p className="text-gray-400 text-center py-8 text-sm">No data for this period</p>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-4">
-                  {[...branchData]
-                    .sort((a, b) => b.count - a.count)
-                    .map((item, i) => (
-                      <div key={item.branch_name} className="flex items-center gap-3">
-                        <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0
-                          ${i === 0 ? 'bg-yellow-400 text-white'
-                          : i === 1 ? 'bg-gray-300 text-gray-700'
-                          : i === 2 ? 'bg-orange-400 text-white'
-                          : 'bg-gray-100 text-gray-500'}`}>
-                          {i + 1}
-                        </span>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex justify-between items-center mb-1">
-                            <span className="text-sm font-semibold text-gray-700 truncate">{item.branch_name}</span>
-                            <span className="text-xs font-bold text-gray-500 ml-2 flex-shrink-0">
-                              {item.count}{' '}
-                              <span className="text-gray-300">
-                                ({totalApplicants > 0 ? ((item.count / totalApplicants) * 100).toFixed(0) : 0}%)
-                              </span>
-                            </span>
-                          </div>
-                          <div className="h-2.5 bg-gray-100 rounded-full overflow-hidden">
-                            <div
-                              className="h-full bg-purple-500 rounded-full transition-all duration-700"
-                              style={{ width: `${totalApplicants > 0 ? (item.count / totalApplicants) * 100 : 0}%` }}
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    ))}
+                <div style={{ height: 200 }}>
+                  <Bar data={branchChartData} options={branchChartOptions} />
                 </div>
               )}
             </SectionCard>
 
-            {/* ── Top Recruiters ───────────────────────────────────────────── */}
-            <SectionCard title="Top Recruiters" icon={Trophy} iconColor="text-yellow-500">
+            {/* Top Recruiters */}
+            <SectionCard
+              title="Top recruiters"
+              dot="#eab308"
+              action={<span className="text-xs text-gray-400">Top 10 · this period</span>}
+            >
               {recruitersData.length === 0 ? (
                 <p className="text-gray-400 text-center py-8 text-sm">No recruiter data for this period</p>
               ) : (
                 <>
-                  <div className="flex items-center gap-4 mb-4 pb-3 border-b border-gray-50 text-xs text-gray-400 font-medium">
+                  <div className="flex items-center gap-4 mb-2 pb-2 border-b border-gray-100 text-xs text-gray-400 font-medium">
                     <span className="ml-auto">Added</span>
                     <span>Hired</span>
                     <span>Rate</span>
                   </div>
-                  <div className="space-y-1">
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-8">
                     {recruitersData.map((recruiter, i) => (
                       <RecruiterRow
                         key={recruiter.id}
@@ -693,7 +755,6 @@ export default function ReportsPage() {
                 </>
               )}
             </SectionCard>
-
           </>
         )}
       </div>

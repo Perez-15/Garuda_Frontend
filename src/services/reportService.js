@@ -26,11 +26,17 @@ export const reportService = {
     return response.data;
   },
 
- export: async (params = {}) => {
-  const response = await apiClient.get('/reports/export', {
-    params,
-    responseType: 'blob',
-  });
-  return response;
-},
+  applicantsTrend: async (params = {}) => {
+    const response = await apiClient.get('/reports/applicants-trend', { params });
+    return response.data;
+  },
+
+  // 'export' is a reserved word — must be quoted as a key
+  'export': async (params = {}) => {
+    const response = await apiClient.get('/reports/export', {
+      params,
+      responseType: 'blob',
+    });
+    return response;
+  },
 };
