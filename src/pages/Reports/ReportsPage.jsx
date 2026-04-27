@@ -36,6 +36,25 @@ function todayIso() {
   return toLocalIso(new Date());
 }
 
+const CLIENT_COLORS = [
+  '#8b5cf6', '#3b82f6', '#22c55e', '#f59e0b',
+  '#ef4444', '#06b6d4', '#ec4899', '#f97316',
+  '#14b8a6', '#a855f7',
+];
+
+function buildClientColorMap(data) {
+  const map = {};
+  let idx = 0;
+  data.forEach(b => {
+    const key = b.client_id ?? b.client_name ?? 'unknown';
+    if (!(key in map)) map[key] = CLIENT_COLORS[idx++ % CLIENT_COLORS.length];
+  });
+  return map;
+}
+
+const capitalize = (str) =>
+  str ? str.charAt(0).toUpperCase() + str.slice(1).toLowerCase() : 'Unknown';
+
 // ─── Shared chart defaults ─────────────────────────────────────────────────────
 const CHART_FONT = "'Inter', system-ui, sans-serif";
 
@@ -420,16 +439,16 @@ export default function ReportsPage() {
   // Horizontal bar chart — source
   const sortedSource = [...sourceData].sort((a, b) => b.count - a.count);
   const sourceColors = ['#6366f1','#818cf8','#a5b4fc','#c7d2fe','#e0e7ff','#eef2ff'];
-  const sourceChartData = {
-    labels: sortedSource.map(s => s.source || 'Unknown'),
-    datasets: [{
-      label: 'Applicants',
-      data:  sortedSource.map(s => parseInt(s.count)),
-      backgroundColor: sortedSource.map((_, i) => sourceColors[i % sourceColors.length]),
-      borderRadius: 4,
-      borderSkipped: false,
-    }],
-  };
+ const sourceChartData = {
+  labels: sortedSource.map(s => capitalize(s.source || 'Unknown')), // ← wrap here
+  datasets: [{
+    label: 'Applicants',
+    data:  sortedSource.map(s => parseInt(s.count)),
+    backgroundColor: sortedSource.map((_, i) => sourceColors[i % sourceColors.length]),
+    borderRadius: 4,
+    borderSkipped: false,
+  }],
+};
   const sourceChartOptions = {
     indexAxis: 'y',
     responsive: true,
@@ -453,27 +472,36 @@ export default function ReportsPage() {
 
   // Grouped bar chart — branch performance
   const sortedBranch = [...branchData].sort((a, b) => b.count - a.count).slice(0, 8);
-  const branchChartData = {
-    labels: sortedBranch.map(b => b.branch_name),
-    datasets: [
-      {
-        label: 'Applicants',
-        data:  sortedBranch.map(b => parseInt(b.count)),
-        backgroundColor: '#8b5cf6',
-        borderRadius: 4,
-        borderSkipped: false,
-      },
-      // NOTE: Add hired-per-branch to the backend applicantsByBranch() response
-      // to populate this dataset. For now it renders with just applicants.
-      // {
-      //   label: 'Hired',
-      //   data: sortedBranch.map(b => parseInt(b.hired || 0)),
-      //   backgroundColor: '#c4b5fd',
-      //   borderRadius: 4,
-      //   borderSkipped: false,
-      // },
-    ],
-  };
+ const clientColorMap  = buildClientColorMap(sortedBranch);
+const branchBarColors = sortedBranch.map(b => {
+  const key = b.client_id ?? b.client_name ?? 'unknown';
+  return clientColorMap[key];
+});
+
+// Unique clients for the legend
+const uniqueClients = [];
+const seenClients   = new Set();
+sortedBranch.forEach(b => {
+  const key   = b.client_id ?? b.client_name ?? 'unknown';
+  const label = b.client_name ?? `Client ${b.client_id}` ?? 'Unknown';
+  if (!seenClients.has(key)) {
+    seenClients.add(key);
+    uniqueClients.push({ key, label, color: clientColorMap[key] });
+  }
+});
+
+const branchChartData = {
+  labels: sortedBranch.map(b => b.branch_name),
+  datasets: [
+    {
+      label: 'Applicants',
+      data:  sortedBranch.map(b => parseInt(b.count)),
+      backgroundColor: branchBarColors,   // ← array now, one color per bar
+      borderRadius: 4,
+      borderSkipped: false,
+    },
+  ],
+};
   const branchChartOptions = {
     responsive: true,
     maintainAspectRatio: false,
@@ -708,15 +736,19 @@ export default function ReportsPage() {
             </div>
 
             {/* Branch performance — grouped bar (full width) */}
-            <SectionCard title="Branch performance" dot="#8b5cf6"
-              action={
-                <div className="flex items-center gap-3 text-xs text-gray-400">
-                  <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-violet-500 inline-block" /> Applicants</span>
-                  {/* Uncomment when backend returns hired-per-branch:
-                  <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-violet-300 inline-block" /> Hired</span>
-                  */}
-                </div>
-              }
+            <SectionCard
+  title="Branch performance"
+  dot="#8b5cf6"
+  action={
+    <div className="flex items-center gap-3 flex-wrap">
+      {uniqueClients.map(c => (
+        <span key={c.key} className="flex items-center gap-1.5 text-xs text-gray-500">
+          <span className="w-2.5 h-2.5 rounded-sm inline-block flex-shrink-0" style={{ background: c.color }} />
+          {c.label}
+        </span>
+      ))}
+    </div>
+  }
             >
               {branchData.length === 0 ? (
                 <p className="text-gray-400 text-center py-8 text-sm">No data for this period</p>

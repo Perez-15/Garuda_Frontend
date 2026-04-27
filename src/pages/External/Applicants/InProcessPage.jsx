@@ -386,7 +386,7 @@ export default function InProcessPage() {
             <select value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)}
               className="block w-full pl-3 pr-10 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500">
               <option value="">All Sources</option>
-              <option value="WordPress">WordPress</option>
+              <option value="Website">Website</option>
               <option value="Gmail">Gmail</option>
               <option value="Facebook">Facebook</option>
               <option value="BossJobs">Boss Jobs</option>

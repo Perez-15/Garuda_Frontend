@@ -19,8 +19,9 @@ export default function AddApplicantPage() {
     full_name: '',
     email: '',
     phone: '',
-    source: 'WordPress',
+    source: 'Facebook',
     branch_id: '',
+    position: '',
     resume: null,
     notes: '',
   });
@@ -54,8 +55,9 @@ export default function AddApplicantPage() {
     setFormData((prev) => ({ ...prev, resume: e.target.files[0] }));
   };
 
-  const handleSubmit = async (e) => {
+ const handleSubmit = async (e) => {
     e.preventDefault();
+    console.log('1. handleSubmit fired');
     setError('');
     setLoading(true);
 
@@ -66,14 +68,17 @@ export default function AddApplicantPage() {
       data.append('phone', formData.phone);
       data.append('source', formData.source);
       data.append('branch_id', formData.branch_id);
+      data.append('position', formData.position);
       if (formData.resume) data.append('resume', formData.resume);
       if (formData.notes) data.append('notes', formData.notes);
 
-      await applicantService.create(data);
-      navigate('/applicants');
+      console.log('2. About to send request');
+      const response = await applicantService.create(data);
+      console.log('3. Response received:', response);
+      navigate('/in-process');
     } catch (err) {
+      console.log('4. Error caught:', err);
       setError(err.response?.data?.message || 'Failed to create applicant');
-      console.error(err);
     } finally {
       setLoading(false);
     }
@@ -159,6 +164,8 @@ export default function AddApplicantPage() {
               />
             </div>
 
+            
+
             {/* Branch */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -186,6 +193,21 @@ export default function AddApplicantPage() {
               </select>
             </div>
 
+            {/* Position */}
+<div>
+  <label className="block text-sm font-medium text-gray-700 mb-2">
+    Position Applied For
+  </label>
+  <input
+    type="text"
+    name="position"
+    value={formData.position}
+    onChange={handleChange}
+    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+    placeholder="e.g. Sales Associate"
+  />
+</div>
+
             {/* Source */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -198,7 +220,7 @@ export default function AddApplicantPage() {
                 required
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
-                <option value="WordPress">WordPress</option>
+                <option value="Website">Website</option>
                 <option value="Gmail">Gmail</option>
                 <option value="Facebook">Facebook</option>
                 <option value="BossJobs">Boss Jobs</option>

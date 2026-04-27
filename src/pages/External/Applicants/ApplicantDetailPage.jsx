@@ -376,7 +376,7 @@ export default function ApplicantDetailPage() {
                       onChange={(e) => setEditForm({ ...editForm, source: e.target.value })}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent">
                       <option value="">Select source</option>
-                      <option value="WordPress">WordPress</option>
+                      <option value="Website">Website</option>
                       <option value="Gmail">Gmail</option>
                       <option value="Facebook">Facebook</option>
                       <option value="BossJobs">Boss Jobs</option>

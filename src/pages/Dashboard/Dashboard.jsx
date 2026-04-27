@@ -137,7 +137,7 @@ function HiredTrendChart({ data }) {
 function SourceBar({ source, count, max }) {
   const pct    = Math.max((count / max) * 100, 2);
   const colors = ['bg-blue-500', 'bg-indigo-500', 'bg-violet-500', 'bg-purple-500', 'bg-fuchsia-500', 'bg-pink-500'];
-  const idx    = ['WordPress', 'Gmail', 'Facebook', 'BossJobs', 'Walk-in', 'Referral'].indexOf(source) % colors.length;
+  const idx    = ['Website', 'Gmail', 'Facebook', 'BossJobs', 'Walk-in', 'Referral'].indexOf(source) % colors.length;
   const color  = colors[Math.max(idx, 0)];
   return (
     <div className="space-y-1">
