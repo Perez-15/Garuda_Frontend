@@ -27,47 +27,84 @@ import {
 import websiteApplicationService from '../../services/websiteApplicationService';
 
 export default function DashboardLayout({ children }) {
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen]   = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
-  const { user, logout } = useAuth();
-  const navigate = useNavigate();
-  const location = useLocation();
+  const { user, logout }                = useAuth();
+  const navigate                        = useNavigate();
+  const location                        = useLocation();
 
+  const userRole    = user?.roles?.[0]?.name;
+  const isTA        = userRole === 'talent_acquisition';
+  const isAdmin     = userRole === 'super_admin' || userRole === 'hr_admin';
+  const isMarketing = userRole === 'marketing';
+  const isAccounting = userRole === 'accounting';
+
+  // Roles that are allowed to see the website applications badge.
+  // Matches the ADMIN_TA group from ProtectedRoute — keep these in sync.
+  const canSeeWebsiteApplications = isAdmin || isTA;
+
+  // ── Logout ─────────────────────────────────────────────────────────────────
+  // FIX: Wrapped in try/finally so navigate('/login') always runs even if
+  // logout() throws a network error. Without this, a failed logout call
+  // leaves the user stuck on the dashboard with a broken session state.
   const handleLogout = async () => {
-    await logout();
-    navigate('/login');
+    try {
+      await logout();
+    } catch {
+      // logout failed on the server side (network error, etc.)
+      // We still want to clear the local session and redirect.
+    } finally {
+      navigate('/login');
+    }
   };
 
-  const userRole = user?.roles?.[0]?.name;
-  const isTA     = userRole === 'talent_acquisition';
-  const isAdmin  = userRole === 'super_admin' || userRole === 'hr_admin';
-
-  // ── Fetch pending website applications count for badge ─────────────────────
+  // ── Fetch pending website applications badge count ─────────────────────────
+  // FIX 1: Only fetch if the user's role can actually see website applications.
+  //         Accounting and marketing were hitting this endpoint unnecessarily.
+  // FIX 2: Skip the fetch when the browser tab is hidden to avoid wasting
+  //         API calls when the user isn't even looking at the page.
+  // FIX 3: Properly handle 401/403 responses — if the API rejects us,
+  //         we log the user out instead of silently swallowing the error.
   useEffect(() => {
+    // Don't set up polling at all for roles that can't see this page.
+    if (!canSeeWebsiteApplications) return;
+
     const fetchBadge = async () => {
+      // Skip the API call if the tab is not visible.
+      // document.hidden is true when the user switches tabs or minimizes.
+      if (document.hidden) return;
+
       try {
         const res = await websiteApplicationService.getPendingCount();
         setPendingCount(res.data.count);
-      } catch {
-        // silently fail — badge just won't show
+      } catch (error) {
+        // If the server returns 401 (expired session) or 403 (no permission),
+        // force a logout instead of silently ignoring it. Any other error
+        // (network timeout, 500, etc.) is ignored — badge just won't update.
+        const status = error?.response?.status;
+        if (status === 401 || status === 403) {
+          await handleLogout();
+        }
       }
     };
+
+    // Run immediately on mount, then every 60 seconds.
     fetchBadge();
-    const interval = setInterval(fetchBadge, 60000); // refresh every 60s
+    const interval = setInterval(fetchBadge, 60000);
+
+    // Cleanup: cancel the interval when the component unmounts (e.g. on logout).
+    // This prevents the interval from firing after the user has left the page.
     return () => clearInterval(interval);
-  }, []);
+  }, [canSeeWebsiteApplications]);
 
   // ── Active check helpers ───────────────────────────────────────────────────
   const isActive     = (path) => location.pathname === path;
   const isStartsWith = (path) => location.pathname.startsWith(path);
-const clientsOpen = isStartsWith('/clients');
+
   // ── Route-based group open state ───────────────────────────────────────────
-  const applicantsOpen =
-    isStartsWith('/applicants') ||
-    isStartsWith('/in-process') ||
-    isStartsWith('/employees');
+  const applicantsOpen = isStartsWith('/applicants') || isStartsWith('/in-process') || isStartsWith('/employees');
   const attendanceOpen = isStartsWith('/attendance');
-  const settingsOpen =
+  const settingsOpen   =
     isStartsWith('/clients')         ||
     isStartsWith('/branches')        ||
     isStartsWith('/manage-columns')  ||
@@ -95,11 +132,13 @@ const clientsOpen = isStartsWith('/clients');
       name: 'Positions',
       href: '/positions',
       icon: Briefcase,
+      hidden: isMarketing || isAccounting,
     },
     {
       name: 'External',
       icon: Users,
       group: true,
+      hidden: isMarketing || isAccounting,
       children: [
         { name: 'In-Process', href: '/in-process', icon: UserCog   },
         { name: 'Employed',   href: '/employees',  icon: UserCheck },
@@ -109,6 +148,7 @@ const clientsOpen = isStartsWith('/clients');
       name: 'Internal',
       href: '/internal/employees',
       icon: UsersIcon,
+      hidden: isMarketing,
     },
 
     ...(isAdmin
@@ -129,52 +169,53 @@ const clientsOpen = isStartsWith('/clients');
       ],
     },
 
-    ...(!isTA
-      ? [{ name: 'Reports', href: '/reports', icon: FileText }]
-      : []),
-
-    ...(isAdmin
-      ? [{ name: 'Users', href: '/users', icon: UsersIcon }]
-      : []),
-
-    
-    {
-          name: 'Website Applications',
-          href: '/website-applications',
-          icon: Globe,
-          badge: pendingCount,
-        },
-
-
-{
-  name: 'Clients',
-  icon: Building2,
-  group: true,
-  children: [
-    { name: 'All Clients', href: '/clients', icon: Building2 },
-    { name: 'Prospects', href: '/clients/prospects', icon: Users },
-  ],
-},
-
-{
-  name: 'Settings',
-  icon: Settings2,
-  group: true,
-  children: [
-    { name: 'Branches', href: '/branches', icon: MapPin },
-
-    ...(!isTA
-      ? [{ name: 'Process', href: '/workflows', icon: Workflow }]
+    ...(!isTA && !isAccounting
+      ? [{ name: 'Reports', href: '/reports', icon: FileText, hidden: isMarketing }]
       : []),
 
     {
-      name: 'Recently Deleted',
-      href: '/recently-deleted',
-      icon: Trash2,
+      name: 'Website Applications',
+      href: '/website-applications',
+      icon: Globe,
+      badge: pendingCount,
+      // Only show to roles that can actually access this page.
+      hidden: !canSeeWebsiteApplications,
     },
-  ],
-},
-  ];
+
+    {
+      name: 'Clients',
+      icon: Building2,
+      group: true,
+      // No hidden flag — all authenticated roles including marketing can see clients
+      children: [
+        { name: 'All Clients', href: '/clients',           icon: Building2 },
+        { name: 'Prospects',   href: '/clients/prospects', icon: Users     },
+      ],
+    },
+
+    {
+      name: 'Settings',
+      icon: Settings2,
+      group: true,
+      children: [
+        { name: 'Branches', href: '/branches', icon: MapPin },
+
+        ...(!isTA && !isAccounting
+          ? [{ name: 'Process', href: '/workflows', icon: Workflow, hidden: isMarketing }]
+          : []),
+
+        ...(isAdmin
+          ? [{ name: 'Users', href: '/users', icon: UsersIcon }]
+          : []),
+
+        // Recently Deleted is admin only — accounting and others are excluded.
+       
+           { name: 'Recently Deleted', href: '/recently-deleted', icon: Trash2 }
+          
+
+      ].filter((child) => !child.hidden),
+    },
+  ].filter((item) => !item.hidden);
 
   // ── Logo ───────────────────────────────────────────────────────────────────
   const LogoBrand = () => (
@@ -191,12 +232,11 @@ const clientsOpen = isStartsWith('/clients');
   const NavItem = ({ item, onLinkClick }) => {
     if (item.group) {
       const isGroupActive =
-        item.name === 'External'   ? applicantsOpen :
-        item.name === 'Attendance' ? attendanceOpen :
+        item.name === 'External'   ? applicantsOpen          :
+        item.name === 'Attendance' ? attendanceOpen           :
         item.name === 'Clients'    ? isStartsWith('/clients') :
-        item.name === 'Settings'   ? settingsOpen   :
+        item.name === 'Settings'   ? settingsOpen             :
         false;
-        
 
       const isOpen = openGroups[item.name] || isGroupActive;
 

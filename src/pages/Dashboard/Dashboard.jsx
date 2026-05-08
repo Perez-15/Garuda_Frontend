@@ -10,10 +10,21 @@ import { dashboardService } from '../../services/dashboardService';
 import { applicantService } from '../../services/applicantService';
 import { employeeService  } from '../../services/hiredService';
 import { useAuth          } from '../../contexts/AuthContext';
-
-// ─── Stat Card ────────────────────────────────────────────────────────────────
 import { Link } from 'react-router-dom';
 
+// ─── Prospect Status Config ───────────────────────────────────────────────────
+const PROSPECT_STATUSES = [
+  { value: 'sent_email',       label: 'Sent Email',        color: 'bg-blue-500'   },
+  { value: 'updated',          label: 'Updated',           color: 'bg-green-500'  },
+  { value: 'they_emailed',     label: 'They Emailed',      color: 'bg-purple-500' },
+  { value: 'hard_copy_needed', label: 'Hard Copy Needed',  color: 'bg-orange-500' },
+  { value: 'no_response',      label: 'No Response',       color: 'bg-gray-400'   },
+  { value: 'after_1_month',    label: 'Follow Up (1 Mo)',  color: 'bg-yellow-500' },
+  { value: 'email_back',       label: 'Email Back',        color: 'bg-teal-500'   },
+  { value: 'for_follow_up',    label: 'For Follow Up',     color: 'bg-red-500'    },
+];
+
+// ─── Stat Card ────────────────────────────────────────────────────────────────
 function StatCard({ title, value, icon: Icon, color, sub, to, trend }) {
   const colors = {
     green:  { bg: 'bg-green-50',  icon: 'text-green-500',  border: 'border-green-200',  val: 'text-green-700'  },
@@ -47,7 +58,7 @@ function StatCard({ title, value, icon: Icon, color, sub, to, trend }) {
   return to ? <Link to={to}>{inner}</Link> : inner;
 }
 
-// ─── Hired Per Month Line Chart ────────────────────────────────────────────────
+// ─── Hired Trend Line Chart ───────────────────────────────────────────────────
 function HiredTrendChart({ data }) {
   if (!data || data.length === 0)
     return <p className="text-gray-400 text-center py-8 text-sm">No data available</p>;
@@ -61,71 +72,40 @@ function HiredTrendChart({ data }) {
   const innerH = height - padY * 2;
 
   const points = data.map((d, i) => ({
-    x: padX + (data.length === 1 ? 0 : (i / (data.length - 1))) * innerW,
-    y: padY + (1 - d.count / max) * innerH,
+    x:     padX + (data.length === 1 ? 0 : (i / (data.length - 1))) * innerW,
+    y:     padY + (1 - d.count / max) * innerH,
     count: d.count,
     month: d.month ?? d.week,
   }));
 
-  const pathD = points
-    .map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`)
-    .join(' ');
-
-  // Area fill path — close down to the bottom
+  const pathD = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
   const areaD = pathD
     + ` L ${points[points.length - 1].x} ${height - padY}`
     + ` L ${points[0].x} ${height - padY} Z`;
 
   return (
     <div className="relative">
-      <svg
-        viewBox={`0 0 ${width} ${height}`}
-        className="w-full"
-        style={{ overflow: 'visible' }}
-      >
+      <svg viewBox={`0 0 ${width} ${height}`} className="w-full" style={{ overflow: 'visible' }}>
         <defs>
           <linearGradient id="lineGrad" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%"   stopColor="#22c55e" stopOpacity="0.18" />
             <stop offset="100%" stopColor="#22c55e" stopOpacity="0"    />
           </linearGradient>
         </defs>
-
-        {/* Area fill */}
         <path d={areaD} fill="url(#lineGrad)" />
-
-        {/* Line */}
         <path d={pathD} fill="none" stroke="#22c55e" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
-
-        {/* Dots + tooltips */}
         {points.map((p, i) => (
           <g key={i} className="group">
             <circle cx={p.x} cy={p.y} r="10" fill="transparent" />
             <circle cx={p.x} cy={p.y} r="4" fill="white" stroke="#22c55e" strokeWidth="2.5" />
-            {/* Hover count label */}
-            <text
-              x={p.x}
-              y={p.y - 10}
-              textAnchor="middle"
-              fontSize="11"
-              fontWeight="600"
-              fill="#15803d"
-              className="opacity-0 group-hover:opacity-100 transition-opacity"
-            >
+            <text x={p.x} y={p.y - 10} textAnchor="middle" fontSize="11" fontWeight="600" fill="#15803d"
+              className="opacity-0 group-hover:opacity-100 transition-opacity">
               {p.count}
             </text>
           </g>
         ))}
-
-        {/* X-axis month labels */}
         {points.map((p, i) => (
-          <text
-            key={i}
-            x={p.x}
-            y={height + 4}
-            textAnchor="middle"
-            fontSize="10"
-            fill="#9ca3af"
-          >
+          <text key={i} x={p.x} y={height + 4} textAnchor="middle" fontSize="10" fill="#9ca3af">
             {p.month}
           </text>
         ))}
@@ -133,16 +113,17 @@ function HiredTrendChart({ data }) {
     </div>
   );
 }
-// ─── Source Bar ───────────────────────────────────────────────────────────────
-function SourceBar({ source, count, max }) {
+
+// ─── Prospect Status Bar ──────────────────────────────────────────────────────
+function ProspectStatusBar({ status, count, max }) {
   const pct    = Math.max((count / max) * 100, 2);
-  const colors = ['bg-blue-500', 'bg-indigo-500', 'bg-violet-500', 'bg-purple-500', 'bg-fuchsia-500', 'bg-pink-500'];
-  const idx    = ['Website', 'Gmail', 'Facebook', 'BossJobs', 'Walk-in', 'Referral'].indexOf(source) % colors.length;
-  const color  = colors[Math.max(idx, 0)];
+  const config = PROSPECT_STATUSES.find((s) => s.value === status);
+  const color  = config?.color || 'bg-gray-400';
+  const label  = config?.label || status;
   return (
     <div className="space-y-1">
       <div className="flex items-center justify-between">
-        <span className="text-sm font-medium text-gray-700">{source || 'Unknown'}</span>
+        <span className="text-sm font-medium text-gray-700">{label}</span>
         <span className="text-sm font-bold text-gray-900">{count}</span>
       </div>
       <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
@@ -187,11 +168,9 @@ export default function Dashboard() {
   const [applicantStats, setApplicantStats] = useState(null);
   const [employeeStats,  setEmployeeStats]  = useState(null);
   const [error,          setError]          = useState(null);
-  const [hiresFilter, setHiresFilter] = useState('monthly');
-  
+  const [hiresFilter,    setHiresFilter]    = useState('monthly');
+  const [viewMode,       setViewMode]       = useState('client');
 
-
-  
   useEffect(() => { fetchAll(); }, []);
 
   const fetchAll = async () => {
@@ -213,18 +192,39 @@ export default function Dashboard() {
     }
   };
 
-  const applicantsBySource = dashData?.applicants_by_source || [];
-  const branchOverview     = dashData?.branch_overview      || [];
-  const recentActivity     = dashData?.recent_activity      || [];
-  const hiredPerMonth      = dashData?.hired_per_month      || [];
-  const hiredPerWeek = dashData?.hired_per_week || [];
-  const maxSource          = Math.max(...applicantsBySource.map((s) => s.count), 1);
+  const branchOverview      = dashData?.branch_overview      || [];
+  const recentActivity      = dashData?.recent_activity      || [];
+  const hiredPerMonth       = dashData?.hired_per_month      || [];
+  const hiredPerWeek        = dashData?.hired_per_week       || [];
+  const prospectsByStatus   = dashData?.prospects_by_status  || [];
+  const totalProspects      = dashData?.total_prospects      || 0;
+  const maxProspects        = Math.max(...prospectsByStatus.map((s) => s.count), 1);
+
+  const clientOverview = Object.values(
+    branchOverview.reduce((acc, branch) => {
+      const key = branch.client_name || '—';
+      if (!acc[key]) {
+        acc[key] = {
+          client_name:     key,
+          branch_count:    0,
+          total_employees: 0,
+          in_process:      0,
+          incomplete_docs: 0,
+        };
+      }
+      acc[key].branch_count    += 1;
+      acc[key].total_employees += branch.total_employees || 0;
+      acc[key].in_process      += branch.in_process      || 0;
+      acc[key].incomplete_docs += branch.incomplete_docs || 0;
+      return acc;
+    }, {})
+  );
 
   const greeting = currentUser?.name
     ? `Welcome back, ${currentUser.name.split(' ')[0]}!`
     : 'Welcome back!';
 
-  // ── Loading ──────────────────────────────────────────────────────────────
+  // ── Loading ───────────────────────────────────────────────────────────────
   if (loading) {
     return (
       <DashboardLayout>
@@ -244,7 +244,7 @@ export default function Dashboard() {
     );
   }
 
-  // ── Error ────────────────────────────────────────────────────────────────
+  // ── Error ─────────────────────────────────────────────────────────────────
   if (error) {
     return (
       <DashboardLayout>
@@ -277,7 +277,7 @@ export default function Dashboard() {
           </button>
         </div>
 
-        {/* ── 5 KPI Cards (absorbed from ApplicantsPage) ───────────────────── */}
+        {/* ── 5 KPI Cards ─────────────────────────────────────────────────── */}
         <div className="grid grid-cols-2 xl:grid-cols-5 gap-4">
           <StatCard
             title="Overall Hired"
@@ -321,129 +321,195 @@ export default function Dashboard() {
           />
         </div>
 
-        {/* ── Charts row ───────────────────────────────────────────────────── */}
+        {/* ── Charts Row ──────────────────────────────────────────────────── */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
-          {/* Hired per Month */}
-<div className="bg-white rounded-xl shadow-sm border border-gray-100">
-  <div className="px-5 py-4 border-b border-gray-50 flex items-center justify-between">
-    
-    <div>
-      <h3 className="text-base font-semibold text-gray-900">Hiring Trend</h3>
-      <p className="text-xs text-gray-400 mt-0.5">
-        {hiresFilter === 'monthly' ? 'Last 6 months' : 'Last 8 weeks'}
-      </p>
-    </div>
-
-    <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
-      <button
-        onClick={() => setHiresFilter('monthly')}
-        className={`px-3 py-1 text-xs font-medium rounded-md ${
-          hiresFilter === 'monthly'
-            ? 'bg-white text-gray-900 shadow-sm'
-            : 'text-gray-500'
-        }`}
-      >
-        Monthly
-      </button>
-
-      <button
-        onClick={() => setHiresFilter('weekly')}
-        className={`px-3 py-1 text-xs font-medium rounded-md ${
-          hiresFilter === 'weekly'
-            ? 'bg-white text-gray-900 shadow-sm'
-            : 'text-gray-500'
-        }`}
-      >
-        Weekly
-      </button>
-    </div>
-
-  </div>
-
-  <div className="p-5">
-    <HiredTrendChart
-      data={hiresFilter === 'monthly' ? hiredPerMonth : hiredPerWeek}
-    />
-  </div>
-</div>
-
-          {/* Applicants by Source */}
+          {/* Hiring Trend */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-100">
             <div className="px-5 py-4 border-b border-gray-50 flex items-center justify-between">
               <div>
-                <h3 className="text-base font-semibold text-gray-900">Applicants by Source</h3>
-                <p className="text-xs text-gray-400 mt-0.5">All time breakdown</p>
+                <h3 className="text-base font-semibold text-gray-900">Hiring Trend</h3>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  {hiresFilter === 'monthly' ? 'Last 6 months' : 'Last 8 weeks'}
+                </p>
               </div>
-              <Users className="h-5 w-5 text-blue-400" />
+              <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
+                <button
+                  onClick={() => setHiresFilter('monthly')}
+                  className={`px-3 py-1 text-xs font-medium rounded-md ${
+                    hiresFilter === 'monthly' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'
+                  }`}
+                >
+                  Monthly
+                </button>
+                <button
+                  onClick={() => setHiresFilter('weekly')}
+                  className={`px-3 py-1 text-xs font-medium rounded-md ${
+                    hiresFilter === 'weekly' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'
+                  }`}
+                >
+                  Weekly
+                </button>
+              </div>
+            </div>
+            <div className="p-5">
+              <HiredTrendChart data={hiresFilter === 'monthly' ? hiredPerMonth : hiredPerWeek} />
+            </div>
+          </div>
+
+          {/* Prospects by Status */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100">
+            <div className="px-5 py-4 border-b border-gray-50 flex items-center justify-between">
+              <div>
+                <h3 className="text-base font-semibold text-gray-900">Prospects by Status</h3>
+                <p className="text-xs text-gray-400 mt-0.5">{totalProspects} total prospects</p>
+              </div>
+              <TrendingUp className="h-5 w-5 text-blue-400" />
             </div>
             <div className="p-5 space-y-3">
-              {applicantsBySource.length === 0 ? (
-                <p className="text-gray-400 text-center py-8 text-sm">No data available</p>
+              {prospectsByStatus.length === 0 ? (
+                <p className="text-gray-400 text-center py-8 text-sm">No prospect data available</p>
               ) : (
-                applicantsBySource.map((item, i) => (
-                  <SourceBar key={i} source={item.source} count={item.count} max={maxSource} />
+                prospectsByStatus.map((item, i) => (
+                  <ProspectStatusBar
+                    key={i}
+                    status={item.status}
+                    count={item.count}
+                    max={maxProspects}
+                  />
                 ))
               )}
             </div>
           </div>
         </div>
 
-        {/* ── Branch Overview + Recent Activity ────────────────────────────── */}
+        {/* ── Branch / Client Overview + Recent Activity ───────────────────── */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
-          {/* Branch Overview */}
+          {/* Branch / Client Overview */}
           <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-gray-100">
             <div className="px-5 py-4 border-b border-gray-50 flex items-center justify-between">
               <div>
-                <h3 className="text-base font-semibold text-gray-900">Branch Overview</h3>
-                <p className="text-xs text-gray-400 mt-0.5">Employees & applicants per branch</p>
+                <h3 className="text-base font-semibold text-gray-900">
+                  {viewMode === 'branch' ? 'Branch Overview' : 'Client Overview'}
+                </h3>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  {viewMode === 'branch'
+                    ? 'Employees & applicants per branch'
+                    : 'Aggregated totals per client'}
+                </p>
               </div>
-              <Building2 className="h-5 w-5 text-purple-400" />
+              <div className="flex items-center gap-3">
+                <Building2 className="h-5 w-5 text-purple-400" />
+                <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
+                  <button
+                    onClick={() => setViewMode('branch')}
+                    className={`px-3 py-1 text-xs font-medium rounded-md ${
+                      viewMode === 'branch' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'
+                    }`}
+                  >
+                    By Branch
+                  </button>
+                  <button
+                    onClick={() => setViewMode('client')}
+                    className={`px-3 py-1 text-xs font-medium rounded-md ${
+                      viewMode === 'client' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'
+                    }`}
+                  >
+                    By Client
+                  </button>
+                </div>
+              </div>
             </div>
+
             <div className="p-5">
               {branchOverview.length === 0 ? (
                 <p className="text-gray-400 text-center py-8 text-sm">No branch data available</p>
               ) : (
                 <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="text-xs text-gray-400 uppercase tracking-wide border-b border-gray-50">
-                        <th className="text-left pb-3 font-semibold">Branch</th>
-                        <th className="text-left pb-3 font-semibold">Client</th>
-                        <th className="text-center pb-3 font-semibold">Employees</th>
-                        <th className="text-center pb-3 font-semibold">In-Process</th>
-                        <th className="text-center pb-3 font-semibold">Incomplete Docs</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-50">
-                      {branchOverview.map((branch, i) => (
-                        <tr key={i} className="hover:bg-gray-50 transition-colors">
-                          <td className="py-3 font-medium text-gray-800">{branch.branch_name}</td>
-                          <td className="py-3 text-gray-500 text-xs">{branch.client_name || '—'}</td>
-                          <td className="py-3 text-center">
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-50 text-green-700">
-                              {branch.total_employees || 0}
-                            </span>
-                          </td>
-                          <td className="py-3 text-center">
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700">
-                              {branch.in_process || 0}
-                            </span>
-                          </td>
-                          <td className="py-3 text-center">
-                            {(branch.incomplete_docs || 0) > 0 ? (
-                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-50 text-red-600">
-                                {branch.incomplete_docs}
-                              </span>
-                            ) : (
-                              <span className="text-green-500 text-xs font-medium">✓ OK</span>
-                            )}
-                          </td>
+                  {viewMode === 'branch' ? (
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="text-xs text-gray-400 uppercase tracking-wide border-b border-gray-50">
+                          <th className="text-left pb-3 font-semibold">Branch</th>
+                          <th className="text-left pb-3 font-semibold">Client</th>
+                          <th className="text-center pb-3 font-semibold">Employees</th>
+                          <th className="text-center pb-3 font-semibold">In-Process</th>
+                          <th className="text-center pb-3 font-semibold">Incomplete Docs</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody className="divide-y divide-gray-50">
+                        {branchOverview.map((branch, i) => (
+                          <tr key={i} className="hover:bg-gray-50 transition-colors">
+                            <td className="py-3 font-medium text-gray-800">{branch.branch_name}</td>
+                            <td className="py-3 text-gray-500 text-xs">{branch.client_name || '—'}</td>
+                            <td className="py-3 text-center">
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-50 text-green-700">
+                                {branch.total_employees || 0}
+                              </span>
+                            </td>
+                            <td className="py-3 text-center">
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700">
+                                {branch.in_process || 0}
+                              </span>
+                            </td>
+                            <td className="py-3 text-center">
+                              {(branch.incomplete_docs || 0) > 0 ? (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-50 text-red-600">
+                                  {branch.incomplete_docs}
+                                </span>
+                              ) : (
+                                <span className="text-green-500 text-xs font-medium">✓ OK</span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  ) : (
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="text-xs text-gray-400 uppercase tracking-wide border-b border-gray-50">
+                          <th className="text-left pb-3 font-semibold">Client</th>
+                          <th className="text-center pb-3 font-semibold">Branches</th>
+                          <th className="text-center pb-3 font-semibold">Employees</th>
+                          <th className="text-center pb-3 font-semibold">In-Process</th>
+                          <th className="text-center pb-3 font-semibold">Incomplete Docs</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-50">
+                        {clientOverview.map((client, i) => (
+                          <tr key={i} className="hover:bg-gray-50 transition-colors">
+                            <td className="py-3 font-medium text-gray-800">{client.client_name}</td>
+                            <td className="py-3 text-center">
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
+                                {client.branch_count}
+                              </span>
+                            </td>
+                            <td className="py-3 text-center">
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-50 text-green-700">
+                                {client.total_employees}
+                              </span>
+                            </td>
+                            <td className="py-3 text-center">
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700">
+                                {client.in_process}
+                              </span>
+                            </td>
+                            <td className="py-3 text-center">
+                              {client.incomplete_docs > 0 ? (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-50 text-red-600">
+                                  {client.incomplete_docs}
+                                </span>
+                              ) : (
+                                <span className="text-green-500 text-xs font-medium">✓ OK</span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
                 </div>
               )}
             </div>
@@ -465,8 +531,8 @@ export default function Dashboard() {
               )}
             </div>
           </div>
-        </div>
 
+        </div>
       </div>
     </DashboardLayout>
   );

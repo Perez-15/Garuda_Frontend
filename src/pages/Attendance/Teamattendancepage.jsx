@@ -3,6 +3,7 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { getTeamAttendance } from '../../services/attendanceService';
 import { userService } from '../../services/userService';
 import DashboardLayout from '../../components/layout/DashboardLayout';
+import axios from 'axios';
 import { X } from 'lucide-react';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -167,6 +168,7 @@ export default function TeamAttendancePage() {
   const [hasMore,        setHasMore]        = useState(true);
   const [loading,        setLoading]        = useState(true);
   const [loadingMore,    setLoadingMore]    = useState(false);
+  const [exportLoading,  setExportLoading]  = useState(false);
   const [filterMode,     setFilterMode]     = useState('cutoff');
   const [filterStatus,   setFilterStatus]   = useState('');
   const [filterDept,     setFilterDept]     = useState('');
@@ -181,11 +183,9 @@ export default function TeamAttendancePage() {
   });
   const [cutoffHalf, setCutoffHalf] = useState(1);
 
-  // Refs for infinite scroll
-  const sentinelRef  = useRef(null);
-  const observerRef  = useRef(null);
-  // Tracks the filter "version" so stale fetches don't append to wrong data
-  const fetchIdRef   = useRef(0);
+  const sentinelRef        = useRef(null);
+  const observerRef        = useRef(null);
+  const fetchIdRef         = useRef(0);
   const scrollContainerRef = useRef(null);
 
   useEffect(() => {
@@ -243,7 +243,7 @@ export default function TeamAttendancePage() {
 
     getTeamAttendance(buildParams(1))
       .then((res) => {
-        if (fetchIdRef.current !== currentFetchId) return; // stale
+        if (fetchIdRef.current !== currentFetchId) return;
         const incoming = res.data ?? [];
         setRecords(incoming);
         setTotalCount(res.total ?? 0);
@@ -256,10 +256,85 @@ export default function TeamAttendancePage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filterMode, selectedDay, weekOffset, month, cutoffHalf, filterStatus, filterDept, filterEmployee]);
 
+  // ── Export PDF ────────────────────────────────────────────────────────────
+  // FIX 1: Replaced hardcoded `http://127.0.0.1:8000/api/v1/...` with apiClient.
+  //         apiClient already has the base URL from the environment variable and
+  //         automatically attaches the Authorization header — no manual token
+  //         reading from localStorage needed.
+  // FIX 2: Removed `localStorage.getItem('token')` — apiClient handles this.
+  // FIX 3: Added loading state so the button is disabled during export,
+  //         preventing the user from triggering multiple simultaneous downloads.
+  const handleExportPdf = async () => {
+    setExportLoading(true);
+    try {
+      // Build the same filter params used for the table view
+      const params = {};
+
+      if (filterMode === 'day') {
+        params.date = selectedDay;
+      } else if (filterMode === 'week') {
+        const { start, end } = getWeekRange(weekOffset);
+        params.date_from = toDateString(start);
+        params.date_to   = toDateString(end);
+      } else if (filterMode === 'cutoff') {
+        const { from, to } = getCutoffRange(month, cutoffHalf);
+        params.date_from = from;
+        params.date_to   = to;
+      }
+
+      if (filterStatus)   params.status  = filterStatus;
+      if (filterDept)     params.role    = filterDept;
+      if (filterEmployee) params.user_id = filterEmployee;
+
+      // apiClient sends the Authorization header automatically.
+      // responseType: 'blob' tells axios to treat the response as a binary
+      // file (PDF bytes) instead of trying to parse it as JSON.
+      const response = await apiClient.get('/attendance/team/export', {
+        params,
+        responseType: 'blob',
+        headers: {
+          Accept: 'application/pdf',
+        },
+      });
+
+      // Create a temporary download link and click it programmatically.
+      // This triggers the browser's native file download without navigating away.
+      const url = URL.createObjectURL(response.data);
+      const a   = document.createElement('a');
+      a.href     = url;
+      a.download = 'attendance_report.pdf';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+
+      // Release the object URL from memory after the download starts.
+      URL.revokeObjectURL(url);
+
+    } catch (err) {
+      // If the server rejects the request (403, 500, etc.), alert the user.
+      // The apiClient interceptor already handles 401 globally.
+      const status = err?.response?.status;
+      if (status === 403) {
+        alert('You do not have permission to export attendance records.');
+      } else {
+        alert('Failed to export PDF. Please try again.');
+      }
+    } finally {
+      setExportLoading(false);
+    }
+  };
+
   // ── Load next page (append) ───────────────────────────────────────────────
+  const hasMoreRef     = useRef(hasMore);
+  const loadingMoreRef = useRef(loadingMore);
+
+  useEffect(() => { hasMoreRef.current = hasMore; },       [hasMore]);
+  useEffect(() => { loadingMoreRef.current = loadingMore; }, [loadingMore]);
+
   const loadMore = useCallback(() => {
-    if (loadingMore || !hasMore) return;
-    const nextPage = page + 1;
+    if (loadingMoreRef.current || !hasMoreRef.current) return;
+
+    const nextPage       = page + 1;
     const currentFetchId = fetchIdRef.current;
 
     setLoadingMore(true);
@@ -275,21 +350,19 @@ export default function TeamAttendancePage() {
         if (fetchIdRef.current !== currentFetchId) return;
         setLoadingMore(false);
       });
-  }, [loadingMore, hasMore, page, buildParams]);
+  }, [page, buildParams]);
 
   // ── IntersectionObserver on sentinel ─────────────────────────────────────
   useEffect(() => {
     if (observerRef.current) observerRef.current.disconnect();
 
-   observerRef.current = new IntersectionObserver(
-  (entries) => {
-    if (entries[0].isIntersecting) loadMore();
-  },
-  {
-    root: scrollContainerRef.current, 
-    threshold: 0.1,
-  }
-);
+    observerRef.current = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) loadMore();
+      },
+      { root: null, rootMargin: '100px', threshold: 0 }
+    );
+
     if (sentinelRef.current) observerRef.current.observe(sentinelRef.current);
 
     return () => observerRef.current?.disconnect();
@@ -317,9 +390,34 @@ export default function TeamAttendancePage() {
       <div className="max-w-6xl mx-auto px-4 py-6 space-y-6">
 
         {/* Header */}
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Team Attendance</h1>
-          <p className="text-sm text-gray-400 mt-0.5">View attendance records for all internal staff.</p>
+        <div className="flex items-start justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Team Attendance</h1>
+            <p className="text-sm text-gray-400 mt-0.5">View attendance records for all internal staff.</p>
+          </div>
+          {/* Export button is disabled while a download is already in progress */}
+          <button
+            onClick={handleExportPdf}
+            disabled={exportLoading}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-white text-sm font-medium transition-colors shadow-sm
+              ${exportLoading
+                ? 'bg-green-400 cursor-not-allowed'
+                : 'bg-green-600 hover:bg-green-700'}`}
+          >
+            {exportLoading ? (
+              <>
+                <span className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full" />
+                Exporting…
+              </>
+            ) : (
+              <>
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5m0 0l5-5m-5 5V4" />
+                </svg>
+                Export PDF
+              </>
+            )}
+          </button>
         </div>
 
         {/* Filter Card */}
@@ -378,9 +476,9 @@ export default function TeamAttendancePage() {
                   onChange={(e) => setMonth(e.target.value)}
                   className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
-                <CutoffPill label="1st – 15th"                      active={cutoffHalf === 1}      onClick={() => setCutoffHalf(1)} />
-                <CutoffPill label={`16th – ${getLastDayOfMonth(month)}th`} active={cutoffHalf === 2} onClick={() => setCutoffHalf(2)} />
-                <CutoffPill label="Full Month"                       active={cutoffHalf === 'full'} onClick={() => setCutoffHalf('full')} />
+                <CutoffPill label="1st – 15th"                           active={cutoffHalf === 1}      onClick={() => setCutoffHalf(1)} />
+                <CutoffPill label={`16th – ${getLastDayOfMonth(month)}th`} active={cutoffHalf === 2}    onClick={() => setCutoffHalf(2)} />
+                <CutoffPill label="Full Month"                            active={cutoffHalf === 'full'} onClick={() => setCutoffHalf('full')} />
               </div>
             )}
 
@@ -447,10 +545,10 @@ export default function TeamAttendancePage() {
             </div>
           ) : (
             <div
-  ref={scrollContainerRef}
-  className="overflow-y-auto overflow-x-auto"
-  style={{ maxHeight: '520px' }}
->
+              ref={scrollContainerRef}
+              className="overflow-y-auto overflow-x-auto"
+              style={{ maxHeight: '520px' }}
+            >
               <table className="w-full text-sm">
                 <thead className="sticky top-0 bg-white z-10">
                   <tr className="text-left text-xs uppercase tracking-wider text-gray-400 border-b border-gray-100">
@@ -507,18 +605,33 @@ export default function TeamAttendancePage() {
                 </tbody>
               </table>
 
-              {/* ── Sentinel + load-more indicator ── */}
-              <div ref={sentinelRef} className="px-6 py-4 flex items-center justify-center gap-2 min-h-[56px]">
+              {/* Sentinel + load-more indicator */}
+              <div ref={sentinelRef} className="px-6 py-4 flex items-center justify-center min-h-[56px]">
                 {loadingMore && (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-400" />
-                    <span className="text-xs text-gray-400">Loading more…</span>
-                  </>
+                  <div className="w-full">
+                    {[...Array(3)].map((_, i) => (
+                      <div key={i} className="flex items-center gap-4 px-2 py-3 border-t border-gray-50">
+                        <div className="flex flex-col gap-1.5 w-40">
+                          <div className="h-3 bg-gray-200 rounded-full animate-pulse w-28" />
+                          <div className="h-2.5 bg-gray-100 rounded-full animate-pulse w-36" />
+                        </div>
+                        <div className="h-3 bg-gray-200 rounded-full animate-pulse w-24" />
+                        {showDateCol && <div className="h-3 bg-gray-200 rounded-full animate-pulse w-20" />}
+                        <div className="h-3 bg-gray-200 rounded-full animate-pulse w-16" />
+                        <div className="h-3 bg-gray-200 rounded-full animate-pulse w-16" />
+                        <div className="h-5 bg-gray-200 rounded-full animate-pulse w-14" />
+                        <div className="h-3 bg-gray-100 rounded-full animate-pulse w-10" />
+                        <div className="h-3 bg-gray-100 rounded-full animate-pulse w-12" />
+                      </div>
+                    ))}
+                    <div className="flex items-center justify-center gap-2 pt-3 pb-1">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-400" />
+                      <span className="text-xs text-gray-400">Loading more records…</span>
+                    </div>
+                  </div>
                 )}
                 {!loadingMore && !hasMore && records.length > 0 && (
-                  <span className="text-xs text-gray-300">
-                    Showing all {totalCount} records
-                  </span>
+                  <span className="text-xs text-gray-300">Showing all {totalCount} records</span>
                 )}
               </div>
             </div>

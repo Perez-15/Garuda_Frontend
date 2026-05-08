@@ -9,11 +9,12 @@ import {
   CategoryScale, LinearScale, BarElement, LineElement,
   PointElement, ArcElement, Filler, Tooltip, Legend,
 } from 'chart.js';
-import { Bar, Line, Doughnut } from 'react-chartjs-2';
+import { Bar, Line } from 'react-chartjs-2';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import { reportService } from '../../services/reportService';
 import { clientService } from '../../services/clientService';
 import { branchService } from '../../services/branchService';
+import apiClient from '../../api/axios';
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, LineElement,
@@ -25,7 +26,6 @@ function getLastDayOfMonth(year, month) {
   return new Date(year, month + 1, 0).getDate();
 }
 
-// Use local date parts to avoid UTC timezone shift (important for UTC+8 PH)
 function toLocalIso(date) {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, '0');
@@ -55,16 +55,27 @@ function buildClientColorMap(data) {
 const capitalize = (str) =>
   str ? str.charAt(0).toUpperCase() + str.slice(1).toLowerCase() : 'Unknown';
 
-// ─── Shared chart defaults ─────────────────────────────────────────────────────
 const CHART_FONT = "'Inter', system-ui, sans-serif";
 
 function chartDefaults(dark) {
   return {
-    textColor:  dark ? '#9ca3af' : '#6b7280',
-    gridColor:  dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)',
-    borderColor: dark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)',
+    textColor:   dark ? '#9ca3af' : '#6b7280',
+    gridColor:   dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)',
+    borderColor: dark ? 'rgba(255,255,255,0.1)'  : 'rgba(0,0,0,0.08)',
   };
 }
+
+// ─── Prospect Statuses ─────────────────────────────────────────────────────────
+const PROSPECT_STATUSES = [
+  { value: 'sent_email',       label: 'Sent Email',        color: '#3b82f6' },
+  { value: 'updated',          label: 'Updated',           color: '#22c55e' },
+  { value: 'they_emailed',     label: 'They Emailed',      color: '#a855f7' },
+  { value: 'hard_copy_needed', label: 'Hard Copy Needed',  color: '#f97316' },
+  { value: 'no_response',      label: 'No Response',       color: '#9ca3af' },
+  { value: 'after_1_month',    label: 'Follow Up (1 Mo)',  color: '#eab308' },
+  { value: 'email_back',       label: 'Email Back',        color: '#14b8a6' },
+  { value: 'for_follow_up',    label: 'For Follow Up',     color: '#ef4444' },
+];
 
 // ─── KPI Card ──────────────────────────────────────────────────────────────────
 function KpiCard({ label, value, sub, trendUp, color, icon: Icon }) {
@@ -149,12 +160,11 @@ function CutoffPill({ label, active, onClick }) {
 
 // ─── Recruiter Row ─────────────────────────────────────────────────────────────
 function RecruiterRow({ recruiter, rank, maxAdded }) {
-  const medals = { 1: '🏆', 2: '🥈', 3: '🥉' };
+  const medals  = { 1: '🏆', 2: '🥈', 3: '🥉' };
   const rankBg  = rank === 1 ? 'bg-yellow-400 text-white' : rank === 2 ? 'bg-gray-300 text-gray-700' : rank === 3 ? 'bg-orange-400 text-white' : 'bg-gray-100 text-gray-500';
   const barPct  = maxAdded > 0 ? Math.round((parseInt(recruiter.total_added) / maxAdded) * 100) : 0;
   const initials = recruiter.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
   const rateCls = recruiter.conversion_rate >= 22 ? 'bg-green-50 text-green-700' : recruiter.conversion_rate >= 15 ? 'bg-yellow-50 text-yellow-700' : 'bg-gray-100 text-gray-500';
-
   return (
     <div className="flex items-center gap-3 py-2.5 border-b border-gray-50 last:border-0">
       <div className={`w-7 h-7 rounded-full ${rankBg} flex items-center justify-center flex-shrink-0 text-xs font-bold`}>
@@ -190,7 +200,6 @@ function RecruiterRow({ recruiter, rank, maxAdded }) {
 }
 
 // ─── Funnel (CSS) ──────────────────────────────────────────────────────────────
-// Kept as CSS — Chart.js has no native funnel chart without extra plugins
 function FunnelViz({ stages }) {
   const max = Math.max(...stages.map(s => s.value), 1);
   const colors = [
@@ -238,6 +247,28 @@ function FunnelViz({ stages }) {
   );
 }
 
+// ─── Prospects by Status Bar ───────────────────────────────────────────────────
+function ProspectStatusBar({ status, count, max }) {
+  const pct    = Math.max((count / max) * 100, 2);
+  const config = PROSPECT_STATUSES.find(s => s.value === status);
+  const color  = config?.color || '#9ca3af';
+  const label  = config?.label || status;
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center justify-between">
+        <span className="text-sm font-medium text-gray-700">{label}</span>
+        <span className="text-sm font-bold text-gray-900">{count}</span>
+      </div>
+      <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+        <div
+          className="h-full rounded-full transition-all duration-700"
+          style={{ width: `${pct}%`, background: color }}
+        />
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Page ─────────────────────────────────────────────────────────────────
 export default function ReportsPage() {
   const [loading, setLoading]           = useState(true);
@@ -250,16 +281,17 @@ export default function ReportsPage() {
   const [cutoffMonth, setCutoffMonth] = useState(currentMonth);
   const [cutoffHalf,  setCutoffHalf]  = useState(now.getDate() <= 15 ? 1 : 2);
 
-  const [sourceData,     setSourceData]     = useState([]);
-  const [statusData,     setStatusData]     = useState([]);
-  const [branchData,     setBranchData]     = useState([]);
-  const [recruitersData, setRecruitersData] = useState([]);
-  const [trendData,      setTrendData]      = useState([]);
+  const [sourceData,      setSourceData]      = useState([]);
+  const [statusData,      setStatusData]      = useState([]);
+  const [branchData,      setBranchData]      = useState([]);
+  const [recruitersData,  setRecruitersData]  = useState([]);
+  const [trendData,       setTrendData]       = useState([]);
+  const [prospectsData,   setProspectsData]   = useState([]);
+  const [totalProspects,  setTotalProspects]  = useState(0);
 
   const [clients,  setClients]  = useState([]);
   const [branches, setBranches] = useState([]);
 
-  // Detect dark mode
   const [dark, setDark] = useState(() => window.matchMedia('(prefers-color-scheme: dark)').matches);
   useEffect(() => {
     const mq = window.matchMedia('(prefers-color-scheme: dark)');
@@ -272,6 +304,7 @@ export default function ReportsPage() {
 
   useEffect(() => {
     fetchFilterOptions();
+    fetchProspects();
     applyPreset('this_month');
   }, []);
 
@@ -288,6 +321,27 @@ export default function ReportsPage() {
       ]);
       setClients(clientsRes.data?.data   || clientsRes.data   || []);
       setBranches(branchesRes.data?.data || branchesRes.data  || branchesRes || []);
+    } catch (e) { console.error(e); }
+  };
+
+  const fetchProspects = async () => {
+    try {
+      const res      = await apiClient.get('/client-prospects');
+      const prospects = res.data.data ?? res.data ?? [];
+      setTotalProspects(prospects.length);
+
+      // Group by status
+      const counts = prospects.reduce((acc, p) => {
+        if (p.status) acc[p.status] = (acc[p.status] || 0) + 1;
+        return acc;
+      }, {});
+
+      const sorted = PROSPECT_STATUSES
+        .map(s => ({ status: s.value, count: counts[s.value] || 0 }))
+        .filter(s => s.count > 0)
+        .sort((a, b) => b.count - a.count);
+
+      setProspectsData(sorted);
     } catch (e) { console.error(e); }
   };
 
@@ -354,16 +408,15 @@ export default function ReportsPage() {
 
   // ── Derived metrics ──────────────────────────────────────────────────────────
   const totalApplicants = sourceData.reduce((s, i) => s + parseInt(i.count || 0), 0);
-  const hired     = parseInt(statusData.find(s => s.status === 'hired')?.count     || 0);
-  const active    = parseInt(statusData.find(s => s.status === 'active')?.count    || 0);
-  const pooling   = parseInt(statusData.find(s => s.status === 'pooling')?.count   || 0);
-  const withdrawn = parseInt(statusData.find(s => s.status === 'withdrawn')?.count || 0);
-  const conversionRate = totalApplicants > 0 ? ((hired / totalApplicants) * 100).toFixed(1) : '0.0';
-  const maxAdded = Math.max(...recruitersData.map(r => parseInt(r.total_added || 0)), 1);
+  const hired           = parseInt(statusData.find(s => s.status === 'hired')?.count     || 0);
+  const active          = parseInt(statusData.find(s => s.status === 'active')?.count    || 0);
+  const pooling         = parseInt(statusData.find(s => s.status === 'pooling')?.count   || 0);
+  const withdrawn       = parseInt(statusData.find(s => s.status === 'withdrawn')?.count || 0);
+  const conversionRate  = totalApplicants > 0 ? ((hired / totalApplicants) * 100).toFixed(1) : '0.0';
+  const maxAdded        = Math.max(...recruitersData.map(r => parseInt(r.total_added || 0)), 1);
+  const maxProspects    = Math.max(...prospectsData.map(s => s.count), 1);
 
   // ── Chart data ───────────────────────────────────────────────────────────────
-
-  // Line chart — applicants over time
   const trendChartData = {
     labels:   trendData.map(d => d.date),
     datasets: [
@@ -378,7 +431,6 @@ export default function ReportsPage() {
         pointHoverRadius: 5,
         fill: true,
         tension: 0.4,
-        borderDash: [],
       },
       {
         label: 'Hired',
@@ -416,39 +468,18 @@ export default function ReportsPage() {
     },
   };
 
-  // Donut chart — status breakdown
-  const donutData = {
-    labels: ['In-process', 'Pooling', 'Hired', 'Withdrawn'],
+  const sortedSource   = [...sourceData].sort((a, b) => b.count - a.count);
+  const sourceColors   = ['#6366f1','#818cf8','#a5b4fc','#c7d2fe','#e0e7ff','#eef2ff'];
+  const sourceChartData = {
+    labels:   sortedSource.map(s => capitalize(s.source || 'Unknown')),
     datasets: [{
-      data: [active, pooling, hired, withdrawn],
-      backgroundColor: ['#eab308', '#f59e0b', '#22c55e', '#94a3b8'],
-      borderWidth: 0,
-      hoverOffset: 4,
+      label: 'Applicants',
+      data:  sortedSource.map(s => parseInt(s.count)),
+      backgroundColor: sortedSource.map((_, i) => sourceColors[i % sourceColors.length]),
+      borderRadius: 4,
+      borderSkipped: false,
     }],
   };
-  const donutOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
-    cutout: '68%',
-    plugins: {
-      legend: { display: false },
-      tooltip: { callbacks: { label: ctx => `${ctx.label}: ${ctx.parsed}` } },
-    },
-  };
-
-  // Horizontal bar chart — source
-  const sortedSource = [...sourceData].sort((a, b) => b.count - a.count);
-  const sourceColors = ['#6366f1','#818cf8','#a5b4fc','#c7d2fe','#e0e7ff','#eef2ff'];
- const sourceChartData = {
-  labels: sortedSource.map(s => capitalize(s.source || 'Unknown')), // ← wrap here
-  datasets: [{
-    label: 'Applicants',
-    data:  sortedSource.map(s => parseInt(s.count)),
-    backgroundColor: sortedSource.map((_, i) => sourceColors[i % sourceColors.length]),
-    borderRadius: 4,
-    borderSkipped: false,
-  }],
-};
   const sourceChartOptions = {
     indexAxis: 'y',
     responsive: true,
@@ -470,38 +501,30 @@ export default function ReportsPage() {
     },
   };
 
-  // Grouped bar chart — branch performance
-  const sortedBranch = [...branchData].sort((a, b) => b.count - a.count).slice(0, 8);
- const clientColorMap  = buildClientColorMap(sortedBranch);
-const branchBarColors = sortedBranch.map(b => {
-  const key = b.client_id ?? b.client_name ?? 'unknown';
-  return clientColorMap[key];
-});
+  const sortedBranch    = [...branchData].sort((a, b) => b.count - a.count).slice(0, 8);
+  const clientColorMap  = buildClientColorMap(sortedBranch);
+  const branchBarColors = sortedBranch.map(b => clientColorMap[b.client_id ?? b.client_name ?? 'unknown']);
+  const uniqueClients   = [];
+  const seenClients     = new Set();
+  sortedBranch.forEach(b => {
+    const key   = b.client_id ?? b.client_name ?? 'unknown';
+    const label = b.client_name ?? `Client ${b.client_id}` ?? 'Unknown';
+    if (!seenClients.has(key)) {
+      seenClients.add(key);
+      uniqueClients.push({ key, label, color: clientColorMap[key] });
+    }
+  });
 
-// Unique clients for the legend
-const uniqueClients = [];
-const seenClients   = new Set();
-sortedBranch.forEach(b => {
-  const key   = b.client_id ?? b.client_name ?? 'unknown';
-  const label = b.client_name ?? `Client ${b.client_id}` ?? 'Unknown';
-  if (!seenClients.has(key)) {
-    seenClients.add(key);
-    uniqueClients.push({ key, label, color: clientColorMap[key] });
-  }
-});
-
-const branchChartData = {
-  labels: sortedBranch.map(b => b.branch_name),
-  datasets: [
-    {
+  const branchChartData = {
+    labels:   sortedBranch.map(b => b.branch_name),
+    datasets: [{
       label: 'Applicants',
       data:  sortedBranch.map(b => parseInt(b.count)),
-      backgroundColor: branchBarColors,   // ← array now, one color per bar
+      backgroundColor: branchBarColors,
       borderRadius: 4,
       borderSkipped: false,
-    },
-  ],
-};
+    }],
+  };
   const branchChartOptions = {
     responsive: true,
     maintainAspectRatio: false,
@@ -512,12 +535,7 @@ const branchChartData = {
     scales: {
       x: {
         grid: { display: false },
-        ticks: {
-          color: cd.textColor,
-          font: { family: CHART_FONT, size: 11 },
-          autoSkip: false,
-          maxRotation: 30,
-        },
+        ticks: { color: cd.textColor, font: { family: CHART_FONT, size: 11 }, autoSkip: false, maxRotation: 30 },
       },
       y: {
         grid: { color: cd.gridColor },
@@ -527,10 +545,9 @@ const branchChartData = {
     },
   };
 
-  // Funnel stages
   const funnelStages = [
-    { name: 'Total applicants', value: totalApplicants },
-    { name: 'In-process',       value: active          },
+    { name: 'Total Applicants', value: totalApplicants },
+    { name: 'In-Process',       value: active          },
     { name: 'Pooling',          value: pooling         },
     { name: 'Hired',            value: hired           },
   ].filter(s => s.value > 0);
@@ -548,7 +565,7 @@ const branchChartData = {
         {/* Header */}
         <div className="flex justify-between items-start">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Reports &amp; analytics</h1>
+            <h1 className="text-2xl font-bold text-gray-900">Reports &amp; Analytics</h1>
             <p className="text-gray-500 text-sm mt-0.5">
               Recruitment insights ·{' '}
               <span className="font-medium text-gray-700">{periodLabel}</span>
@@ -563,11 +580,9 @@ const branchChartData = {
           </button>
         </div>
 
-        {/* Filters — single row */}
+        {/* Filters */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 px-5 py-3">
           <div className="flex items-center gap-2 flex-wrap">
-
-            {/* Period presets */}
             <Calendar className="h-4 w-4 text-gray-300 flex-shrink-0" />
             {[
               { key: 'today',      label: 'Today'      },
@@ -581,7 +596,6 @@ const branchChartData = {
 
             <span className="text-gray-200 mx-0.5 select-none">|</span>
 
-            {/* Cutoff */}
             <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Cutoff:</span>
             <input
               type="month"
@@ -602,7 +616,6 @@ const branchChartData = {
 
             <span className="text-gray-200 mx-0.5 select-none">|</span>
 
-            {/* Client + Branch dropdowns */}
             <select
               value={filters.client_id}
               onChange={e => setFilters({ ...filters, client_id: e.target.value })}
@@ -620,7 +633,6 @@ const branchChartData = {
               {branches.map(b => <option key={b.id} value={b.id}>{b.branch_name}</option>)}
             </select>
 
-            {/* Clear filters */}
             {(filters.client_id || filters.branch_id) && (
               <button
                 onClick={() => setFilters({ client_id: '', branch_id: '' })}
@@ -630,7 +642,6 @@ const branchChartData = {
               </button>
             )}
 
-            {/* Active period label — right side */}
             <span className="ml-auto text-xs text-gray-400 font-medium hidden md:block">
               {periodLabel}
             </span>
@@ -653,23 +664,22 @@ const branchChartData = {
           <>
             {/* KPI Cards */}
             <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-              <KpiCard label="Total applicants" value={totalApplicants.toLocaleString()} icon={Users}       color="blue"   sub="In selected period"                    />
-              <KpiCard label="Hired"            value={hired}                            icon={CheckCircle} color="green"  sub="Successfully placed"                   />
-              <KpiCard label="In-process"       value={active}                           icon={Briefcase}   color="yellow" sub="Active in pipeline"                    />
-              <KpiCard label="Pooling"          value={pooling}                          icon={Users}       color="amber"  sub="In talent pool"                        />
-              <KpiCard label="Conversion rate"  value={`${conversionRate}%`}             icon={TrendingUp}  color="purple" sub={`${hired} hired of ${totalApplicants}`} />
+              <KpiCard label="Total applicants" value={totalApplicants.toLocaleString()} icon={Users}       color="blue"   sub="In selected period"                     />
+              <KpiCard label="Hired"            value={hired}                            icon={CheckCircle} color="green"  sub="Successfully placed"                    />
+              <KpiCard label="In-process"       value={active}                           icon={Briefcase}   color="yellow" sub="Active in pipeline"                     />
+              <KpiCard label="Pooling"          value={pooling}                          icon={Users}       color="amber"  sub="In talent pool"                         />
+              <KpiCard label="Conversion rate"  value={`${conversionRate}%`}             icon={TrendingUp}  color="purple" sub={`${hired} hired of ${totalApplicants}`}  />
             </div>
 
-            {/* Row 1: Trend line + Status donut */}
+            {/* Row 1: Trend + Prospects by Status */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
-              {/* Trend line chart */}
               {trendData.length > 0 ? (
                 <SectionCard title="Applicants over time" dot="#3b82f6"
                   action={
                     <div className="flex items-center gap-3 text-xs text-gray-400">
                       <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-blue-400 inline-block" /> Applicants</span>
-                      <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-green-400 inline-block border-dashed border-t-2" /> Hired</span>
+                      <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-green-400 inline-block" /> Hired</span>
                     </div>
                   }
                 >
@@ -680,41 +690,38 @@ const branchChartData = {
               ) : (
                 <SectionCard title="Applicants over time" dot="#3b82f6">
                   <div className="flex items-center justify-center h-52 text-sm text-gray-400">
-                    Trend data unavailable — add <code className="mx-1 bg-gray-100 px-1 rounded text-xs">applicantsTrend()</code> to reportService
+                    No trend data for this period
                   </div>
                 </SectionCard>
               )}
 
-              {/* Status donut */}
-              <SectionCard title="Status breakdown" dot="#a855f7">
-                <div className="flex items-center gap-6">
-                  <div style={{ height: 200, width: 200, flexShrink: 0 }}>
-                    <Doughnut data={donutData} options={donutOptions} />
-                  </div>
-                  <div className="flex flex-col gap-3 flex-1">
-                    {[
-                      { label: 'In-process', value: active,    color: '#eab308' },
-                      { label: 'Pooling',    value: pooling,   color: '#f59e0b' },
-                      { label: 'Hired',      value: hired,     color: '#22c55e' },
-                      { label: 'Withdrawn',  value: withdrawn, color: '#94a3b8' },
-                    ].map(item => (
-                      <div key={item.label} className="flex justify-between items-center text-sm">
-                        <span className="flex items-center gap-2">
-                          <span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ background: item.color }} />
-                          <span className="text-gray-600">{item.label}</span>
-                        </span>
-                        <strong className="text-gray-800">{item.value.toLocaleString()}</strong>
-                      </div>
+              {/* Prospects by Status — replaces status donut */}
+              <SectionCard
+                title="Prospects by status"
+                dot="#14b8a6"
+                action={
+                  <span className="text-xs text-gray-400">{totalProspects} total prospects</span>
+                }
+              >
+                {prospectsData.length === 0 ? (
+                  <p className="text-gray-400 text-center py-8 text-sm">No prospect data available</p>
+                ) : (
+                  <div className="space-y-3">
+                    {prospectsData.map((item, i) => (
+                      <ProspectStatusBar
+                        key={i}
+                        status={item.status}
+                        count={item.count}
+                        max={maxProspects}
+                      />
                     ))}
                   </div>
-                </div>
+                )}
               </SectionCard>
             </div>
 
             {/* Row 2: Source bar + Funnel */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-
-              {/* Horizontal bar — source */}
               <SectionCard title="Applicants by source" dot="#6366f1">
                 {sourceData.length === 0 ? (
                   <p className="text-gray-400 text-center py-8 text-sm">No data for this period</p>
@@ -725,7 +732,6 @@ const branchChartData = {
                 )}
               </SectionCard>
 
-              {/* Funnel — CSS (no Chart.js plugin needed) */}
               <SectionCard title="Recruitment funnel" dot="#22c55e">
                 {funnelStages.length === 0 ? (
                   <p className="text-gray-400 text-center py-8 text-sm">No data for this period</p>
@@ -735,20 +741,20 @@ const branchChartData = {
               </SectionCard>
             </div>
 
-            {/* Branch performance — grouped bar (full width) */}
+            {/* Branch performance */}
             <SectionCard
-  title="Branch performance"
-  dot="#8b5cf6"
-  action={
-    <div className="flex items-center gap-3 flex-wrap">
-      {uniqueClients.map(c => (
-        <span key={c.key} className="flex items-center gap-1.5 text-xs text-gray-500">
-          <span className="w-2.5 h-2.5 rounded-sm inline-block flex-shrink-0" style={{ background: c.color }} />
-          {c.label}
-        </span>
-      ))}
-    </div>
-  }
+              title="Branch performance"
+              dot="#8b5cf6"
+              action={
+                <div className="flex items-center gap-3 flex-wrap">
+                  {uniqueClients.map(c => (
+                    <span key={c.key} className="flex items-center gap-1.5 text-xs text-gray-500">
+                      <span className="w-2.5 h-2.5 rounded-sm inline-block flex-shrink-0" style={{ background: c.color }} />
+                      {c.label}
+                    </span>
+                  ))}
+                </div>
+              }
             >
               {branchData.length === 0 ? (
                 <p className="text-gray-400 text-center py-8 text-sm">No data for this period</p>

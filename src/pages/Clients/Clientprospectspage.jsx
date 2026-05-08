@@ -1,9 +1,9 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   Plus, Search, Filter, ChevronDown, X, Save,
   AlertCircle, Edit2, Trash2, Building2, Phone,
   Mail, MapPin, User, MessageSquare, Settings2,
-  Users, TrendingUp, Clock, CheckCircle,
+  Users, TrendingUp, Clock, CheckCircle, GripVertical,
 } from "lucide-react";
 import apiClient from "../../api/axios";
 import DashboardLayout from "../../components/layout/DashboardLayout";
@@ -373,6 +373,46 @@ export default function ClientProspectsPage() {
   const [showManageCols,  setShowManageCols]   = useState(false);
   const [showSummary,     setShowSummary]      = useState(true);
 
+
+  const dragCol     = useRef(null);
+  const dragOverCol = useRef(null);
+  const [dragOverKey, setDragOverKey] = useState(null);
+  const [dragKey,     setDragKey]     = useState(null);
+
+  const onDragStart = (key) => { dragCol.current = key; setDragKey(key); };
+  const onDragEnter = (key) => { dragOverCol.current = key; setDragOverKey(key); };
+  const onDragEnd = () => {
+    const fromKey = dragCol.current;
+    const toKey   = dragOverCol.current;
+
+    setDragOverKey(null);
+    setDragKey(null);
+    dragCol.current     = null;
+    dragOverCol.current = null;
+
+    if (!fromKey || !toKey || fromKey === toKey) return;
+
+    setColumns((prev) => {
+      const sorted = [...prev].sort((a, b) => a.order - b.order);
+      const from   = sorted.findIndex((c) => c.field_key === fromKey);
+      const to     = sorted.findIndex((c) => c.field_key === toKey);
+
+      if (from === -1 || to === -1) return prev;
+
+      const [moved] = sorted.splice(from, 1);
+      sorted.splice(to, 0, moved);
+      const reordered = sorted.map((c, i) => ({ ...c, order: i + 1 }));
+
+      apiClient.post("/custom-columns/reorder", {
+        page: PAGE_KEY,
+        order: reordered.map((c) => c.field_key),
+      }).catch(() => {});
+
+      return reordered;
+    });
+  };
+
+
   // ── Fetch marketing users (admin only) ───────────────────────────────────
   useEffect(() => {
     if (!isAdmin) return;
@@ -391,15 +431,42 @@ export default function ClientProspectsPage() {
   }, [isAdmin]);
 
   // ── Fetch columns ─────────────────────────────────────────────────────────
-  const fetchColumns = useCallback(async () => {
-    try {
-      const res = await apiClient.get("/custom-columns", { params: { page: PAGE_KEY } });
-      const fetched = res.data.data ?? res.data;
-      setColumns(fetched.length > 0 ? fetched : DEFAULT_COLUMNS);
-    } catch {
-      setColumns(DEFAULT_COLUMNS);
+const fetchColumns = useCallback(async () => {
+  try {
+    const res = await apiClient.get("/custom-columns", { params: { page: PAGE_KEY } });
+    const fetched = res.data.data ?? res.data;
+
+    console.log("📋 fetchColumns raw response:", fetched.map(c => ({ field_key: c.field_key, order: c.order })));
+
+    const fetchedKeys = new Set(fetched.map((c) => c.field_key));
+    const missingCols = DEFAULT_COLUMNS.filter((c) => !fetchedKeys.has(c.field_key));
+
+    // Only call batch if there are actually missing columns
+    if (missingCols.length > 0) {
+      const maxOrder = fetched.length > 0
+        ? Math.max(...fetched.map((c) => c.order))
+        : 0;
+
+      // Only send the MISSING columns, don't touch existing ones
+      await apiClient.post("/custom-columns/batch", {
+        page: PAGE_KEY,
+        columns: missingCols.map((col, i) => ({
+          ...col,
+          options: null,
+          order: maxOrder + i + 1,
+        })),
+      });
+
+      const res2 = await apiClient.get("/custom-columns", { params: { page: PAGE_KEY } });
+      setColumns(res2.data.data ?? res2.data);
+    } else {
+      setColumns(fetched);
     }
-  }, []);
+  } catch (err) {
+    console.error("fetchColumns failed:", err);
+    setColumns(DEFAULT_COLUMNS);
+  }
+}, []);
 
   // ── Fetch prospects (filtered) ────────────────────────────────────────────
   const fetchProspects = useCallback(async () => {
@@ -577,10 +644,27 @@ export default function ClientProspectsPage() {
                     </th>
                   )}
                   {tableColumns.map((col) => (
-                    <th key={col.field_key}
-                      className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">
-                      {col.label}
-                    </th>
+                  <th key={col.field_key}
+                  draggable
+                  onDragStart={() => onDragStart(col.field_key)}
+                  onDragEnter={() => onDragEnter(col.field_key)}
+                  onDragEnd={onDragEnd}
+                  onDragOver={(e) => e.preventDefault()}
+                  className={`
+                    px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide
+                    cursor-grab active:cursor-grabbing select-none group transition-colors whitespace-nowrap
+                    ${dragKey === col.field_key
+                      ? 'opacity-40 bg-indigo-50'
+                      : dragOverKey === col.field_key
+                        ? 'bg-indigo-100 text-indigo-700 border-l-2 border-indigo-400'
+                        : ''}
+                  `}
+                >
+                  <div className="flex items-center gap-1">
+                    <GripVertical className="h-3.5 w-3.5 text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
+                    {col.label}
+                  </div>
+                </th>
                   ))}
                   <th className="px-4 py-3" />
                 </tr>

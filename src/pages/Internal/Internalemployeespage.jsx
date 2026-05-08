@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import {
@@ -24,6 +23,20 @@ const DEPT_TABS = [
   { key: 'accounting',         label: 'Accounting'         },
   { key: 'marketing',          label: 'Marketing'          },
 ];
+
+const SORT_MAP = {
+  newest:    { sort: 'date_hired', direction: 'desc' },
+  oldest:    { sort: 'date_hired', direction: 'asc'  },
+  name_asc:  { sort: 'name',       direction: 'asc'  },
+  name_desc: { sort: 'name',       direction: 'desc' },
+};
+
+const SORT_LABELS = {
+  newest:    'Newest First',
+  oldest:    'Oldest First',
+  name_asc:  'Name A–Z',
+  name_desc: 'Name Z–A',
+};
 
 function useDebounce(value, delay = 400) {
   const [debounced, setDebounced] = useState(value);
@@ -79,6 +92,24 @@ function DocBadge({ status }) {
   return <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium ${map[status]}`}>{labels[status]}</span>;
 }
 
+function EmploymentStatusBadge({ status }) {
+  const map = {
+    resigned:   { label: 'Resigned',   cls: 'bg-yellow-50 text-yellow-700 border-yellow-300' },
+    terminated: { label: 'Terminated', cls: 'bg-red-50 text-red-600 border-red-300'          },
+    endo:       { label: 'Endo',       cls: 'bg-orange-50 text-orange-600 border-orange-300' },
+    awol:       { label: 'AWOL',       cls: 'bg-purple-50 text-purple-700 border-purple-300' },
+    active:     { label: 'Active',     cls: 'bg-green-50 text-green-700 border-green-200'    },
+  };
+  if (!status) return <span className="text-gray-300 text-xs">—</span>;
+  const s = map[status.toLowerCase()] || { label: status, cls: 'bg-gray-50 text-gray-500 border-gray-200' };
+  return (
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold border ${s.cls}`}>
+      <span className="h-1.5 w-1.5 rounded-full bg-current opacity-70" />
+      {s.label}
+    </span>
+  );
+}
+
 const FIXED_COLUMNS = [
   { key: 'name',                    label: 'Name',             always: true,  fixed: true },
   { key: 'role',                    label: 'Role/Dept',        always: false, fixed: true },
@@ -86,6 +117,7 @@ const FIXED_COLUMNS = [
   { key: 'date_hired',              label: 'Date Hired',       always: false, fixed: true },
   { key: 'assigned_branches',       label: 'Branches',         always: false, fixed: true },
   { key: 'status',                  label: 'Status',           always: false, fixed: true },
+  { key: 'employment_status',       label: 'Employment Status',always: false, fixed: true },
   { key: 'requirements_status',     label: 'Requirements',     always: false, fixed: true },
   { key: 'nbi_status',              label: 'NBI',              always: false, fixed: true },
   { key: 'medcert_status',          label: 'Medical',          always: false, fixed: true },
@@ -150,6 +182,7 @@ function CellValue({ colKey, user }) {
       );
     }
     case 'status':                  return <StatusBadge isActive={user.is_active} />;
+    case 'employment_status':       return <EmploymentStatusBadge status={user.employment_status} />;
     case 'requirements_status':     return <ReqBadge status={user.requirements_status} />;
     case 'nbi_status':              return <DocBadge status={user.nbi_status} />;
     case 'medcert_status':          return <DocBadge status={user.medcert_status} />;
@@ -176,6 +209,7 @@ function UserModal({ onClose, onSaved, canManage }) {
     police_clearance_status: 'pending', contract_status: 'pending',
     sss: '', pagibig: '', philhealth: '', tin: '',
     requirements_status: 'pending',
+    employment_status: 'active',
   });
   const [saving, setSaving] = useState(false);
   const [error,  setError]  = useState('');
@@ -242,14 +276,17 @@ function UserModal({ onClose, onSaved, canManage }) {
               </div>
               <div>
                 <label className="block text-xs font-semibold text-gray-500 mb-1">Department / Role *</label>
-                <select value={form.role} onChange={(e) => set('role', e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
-                  <option value="talent_acquisition">Talent Acquisition</option>
-                  <option value="hr_admin">HR</option>
-                  <option value="accounting">Accounting</option>
-                  <option value="marketing">Marketing</option>
-                  <option value="super_admin">Super Admin</option>
-                </select>
+               <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}
+  className="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+  <optgroup label="Sort by Date">
+    <option value="newest">Newest First</option>
+    <option value="oldest">Oldest First</option>
+  </optgroup>
+  <optgroup label="Sort by Name">
+    <option value="name_asc">Name A–Z</option>
+    <option value="name_desc">Name Z–A</option>
+  </optgroup>
+</select>
               </div>
               <div>
                 <label className="block text-xs font-semibold text-gray-500 mb-1">Contact Number</label>
@@ -257,10 +294,21 @@ function UserModal({ onClose, onSaved, canManage }) {
                   className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="09XX XXX XXXX" />
               </div>
-              <div className="col-span-2">
+              <div>
                 <label className="block text-xs font-semibold text-gray-500 mb-1">Date Hired</label>
                 <input type="date" value={form.date_hired} onChange={(e) => set('date_hired', e.target.value)}
                   className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 mb-1">Employment Status</label>
+                <select value={form.employment_status} onChange={(e) => set('employment_status', e.target.value)}
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                  <option value="active">Active</option>
+                  <option value="resigned">Resigned</option>
+                  <option value="terminated">Terminated</option>
+                  <option value="endo">Endo</option>
+                  <option value="awol">AWOL</option>
+                </select>
               </div>
             </div>
           )}
@@ -347,13 +395,16 @@ export default function InternalEmployeesPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [perPage,     setPerPage]     = useState(15);
 
-  const [searchInput,  setSearchInput]  = useState('');
-  const debouncedSearch                  = useDebounce(searchInput, 400);
-  const [activeTab,    setActiveTab]    = useState('');
-  const [reqFilter,    setReqFilter]    = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
+  const [searchInput,     setSearchInput]     = useState('');
+  const debouncedSearch                        = useDebounce(searchInput, 400);
+  const [activeTab,       setActiveTab]       = useState('');
+  const [reqFilter,       setReqFilter]       = useState('');
+  const [empStatusFilter, setEmpStatusFilter] = useState('active');
+  const [sortBy,          setSortBy]          = useState('newest');
+  const [showSortPicker,  setShowSortPicker]  = useState(false);
+  const sortRef = useRef(null);
 
-  // ── Column management — persisted per user in localStorage ────────────────
+  // ── Column management ─────────────────────────────────────────────────────
   const { visibleCols, colOrder, toggleColumn: _toggleColumn, setColOrder } =
     usePersistedColumns('internal', currentUser?.id, DEFAULT_VISIBLE);
   const [showColPicker,  setShowColPicker]  = useState(false);
@@ -369,18 +420,31 @@ export default function InternalEmployeesPage() {
   const userRole  = currentUser?.roles?.[0]?.name ?? '';
   const canManage = userRole === 'super_admin' || userRole === 'hr_admin';
 
+  // Close sort picker on outside click
+  useEffect(() => {
+    const handler = (e) => {
+      if (sortRef.current && !sortRef.current.contains(e.target)) {
+        setShowSortPicker(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
   useEffect(() => { fetchCustomCols(); }, []);
-  useEffect(() => { fetchUsers(); }, [debouncedSearch, activeTab, reqFilter, statusFilter, currentPage, perPage]);
-  useEffect(() => { setCurrentPage(1); }, [debouncedSearch, activeTab, reqFilter, statusFilter, perPage]);
+  useEffect(() => { fetchUsers(); }, [debouncedSearch, activeTab, reqFilter, empStatusFilter, sortBy, currentPage, perPage]);
+  useEffect(() => { setCurrentPage(1); }, [debouncedSearch, activeTab, reqFilter, empStatusFilter, sortBy, perPage]);
 
   const fetchUsers = async () => {
     try {
       setLoading(true);
+      const { sort, direction } = SORT_MAP[sortBy] || SORT_MAP.newest;
       const params = {
         page: currentPage, per_page: perPage, search: debouncedSearch,
-        ...(activeTab    && { role: activeTab }),
-        ...(reqFilter    && { requirements_status: reqFilter }),
-        ...(statusFilter !== '' && { is_active: statusFilter }),
+        sort, direction,
+        ...(activeTab       && { role: activeTab }),
+        ...(reqFilter       && { requirements_status: reqFilter }),
+        ...(empStatusFilter && { employment_status: empStatusFilter }),
       };
       const res = await userService.getAll(params);
       setUsers(res.data || []);
@@ -409,7 +473,6 @@ export default function InternalEmployeesPage() {
   ];
 
   const toggleColumn = (key) => _toggleColumn(key, allColumnsWithCustom);
-
   const activeColumns = colOrder.filter((k) => visibleCols.includes(k));
 
   const onDragStart = (key) => { dragCol.current = key; setDragKey(key); };
@@ -427,8 +490,12 @@ export default function InternalEmployeesPage() {
     dragCol.current = null; dragOverCol.current = null;
   };
 
-  const clearFilters = () => { setSearchInput(''); setReqFilter(''); setStatusFilter(''); setCurrentPage(1); };
-  const hasFilters = searchInput || reqFilter || statusFilter !== '';
+  const clearFilters = () => {
+    setSearchInput(''); setReqFilter(''); setEmpStatusFilter('active');
+    setSortBy('newest'); setCurrentPage(1);
+  };
+
+  const hasFilters = searchInput || reqFilter || empStatusFilter !== 'active' || sortBy !== 'newest';
 
   return (
     <DashboardLayout>
@@ -479,7 +546,7 @@ export default function InternalEmployeesPage() {
 
         {/* Filters */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 space-y-3">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
               <input type="text" value={searchInput} onChange={(e) => setSearchInput(e.target.value)}
@@ -493,15 +560,30 @@ export default function InternalEmployeesPage() {
               <option value="incomplete">✗ Incomplete</option>
               <option value="pending">⏳ Pending</option>
             </select>
-            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}
+            <select value={empStatusFilter} onChange={(e) => setEmpStatusFilter(e.target.value)}
               className="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-              <option value="">All Status</option>
-              <option value="true">Active</option>
-              <option value="false">Inactive</option>
+              <option value="">All Employment Status</option>
+              <option value="active">Active</option>
+              <option value="resigned">Resigned</option>
+              <option value="terminated">Terminated</option>
+              <option value="endo">Endo</option>
+              <option value="awol">AWOL</option>
             </select>
+             <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}
+    className="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+    <optgroup label="Sort by Date">
+      <option value="newest">Newest First</option>
+      <option value="oldest">Oldest First</option>
+    </optgroup>
+    <optgroup label="Sort by Name">
+      <option value="name_asc">Name A–Z</option>
+      <option value="name_desc">Name Z–A</option>
+    </optgroup>
+  </select>
           </div>
 
           <div className="flex items-center justify-between pt-2 border-t border-gray-50">
+            {/* Columns picker */}
             <div className="relative">
               <button onClick={() => setShowColPicker((v) => !v)}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">
@@ -534,22 +616,25 @@ export default function InternalEmployeesPage() {
                 </div>
               )}
             </div>
-            <div className="flex items-center gap-3">
-              {hasFilters && (
-                <button onClick={clearFilters} className="text-xs text-red-400 hover:text-red-600 flex items-center gap-1">
-                  <X className="h-3 w-3" /> Clear filters
-                </button>
-              )}
-              <div className="flex items-center gap-1.5 text-xs text-gray-400">
-                <span>Rows:</span>
-                <select value={perPage} onChange={(e) => setPerPage(Number(e.target.value))}
-                  className="text-xs border border-gray-200 rounded px-1.5 py-1 focus:outline-none">
-                  <option value={15}>15</option>
-                  <option value={30}>30</option>
-                  <option value={50}>50</option>
-                </select>
-              </div>
-            </div>
+
+            {/* Right side: clear + sort + rows */}
+           <div className="flex items-center gap-3">
+  {hasFilters && (
+    <button onClick={clearFilters} className="text-xs text-red-400 hover:text-red-600 flex items-center gap-1">
+      <X className="h-3 w-3" /> Clear filters
+    </button>
+  )}
+ 
+  <div className="flex items-center gap-1.5 text-xs text-gray-400">
+    <span>Rows:</span>
+    <select value={perPage} onChange={(e) => setPerPage(Number(e.target.value))}
+      className="text-xs border border-gray-200 rounded px-1.5 py-1 focus:outline-none">
+      <option value={15}>15</option>
+      <option value={30}>30</option>
+      <option value={50}>50</option>
+    </select>
+  </div>
+</div>
           </div>
         </div>
 
