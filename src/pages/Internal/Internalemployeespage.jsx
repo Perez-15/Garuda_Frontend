@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  Search, Users, Plus, Edit2, Save, X, Loader2, Trash2,
-  ChevronUp, ChevronDown, GripVertical, Filter, Settings2,
+  Search, Users, Plus, Save, X, Loader2,
+  GripVertical, Filter, Settings2,
   UserCheck, UserX, Building2, CalendarDays, Phone,
   ChevronRight,
 } from 'lucide-react';
@@ -31,13 +31,6 @@ const SORT_MAP = {
   name_desc: { sort: 'name',       direction: 'desc' },
 };
 
-const SORT_LABELS = {
-  newest:    'Newest First',
-  oldest:    'Oldest First',
-  name_asc:  'Name A–Z',
-  name_desc: 'Name Z–A',
-};
-
 function useDebounce(value, delay = 400) {
   const [debounced, setDebounced] = useState(value);
   useEffect(() => {
@@ -49,14 +42,18 @@ function useDebounce(value, delay = 400) {
 
 function RoleBadge({ role }) {
   const map = {
-    super_admin:        { label: 'Super Admin',        cls: 'bg-red-100 text-red-700'      },
-    hr_admin:           { label: 'HR',                 cls: 'bg-blue-100 text-blue-700'    },
-    talent_acquisition: { label: 'Talent Acquisition', cls: 'bg-indigo-100 text-indigo-700'},
-    accounting:         { label: 'Accounting',         cls: 'bg-amber-100 text-amber-700'  },
-    marketing:          { label: 'Marketing',          cls: 'bg-pink-100 text-pink-700'    },
+    super_admin:        { label: 'Super Admin',        cls: 'bg-red-100 text-red-700'       },
+    hr_admin:           { label: 'HR',                 cls: 'bg-blue-100 text-blue-700'     },
+    talent_acquisition: { label: 'Talent Acquisition', cls: 'bg-indigo-100 text-indigo-700' },
+    accounting:         { label: 'Accounting',         cls: 'bg-amber-100 text-amber-700'   },
+    marketing:          { label: 'Marketing',          cls: 'bg-pink-100 text-pink-700'     },
   };
   const r = map[role] || { label: role, cls: 'bg-gray-100 text-gray-600' };
-  return <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${r.cls}`}>{r.label}</span>;
+  return (
+    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${r.cls}`}>
+      {r.label}
+    </span>
+  );
 }
 
 function StatusBadge({ isActive }) {
@@ -89,7 +86,11 @@ function DocBadge({ status }) {
   if (!status) return <span className="text-gray-300 text-xs">—</span>;
   const map    = { submitted: 'bg-green-100 text-green-700', pending: 'bg-yellow-100 text-yellow-700', not_required: 'bg-gray-100 text-gray-400' };
   const labels = { submitted: '✓', pending: '⏳', not_required: 'N/A' };
-  return <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium ${map[status]}`}>{labels[status]}</span>;
+  return (
+    <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium ${map[status]}`}>
+      {labels[status]}
+    </span>
+  );
 }
 
 function EmploymentStatusBadge({ status }) {
@@ -111,30 +112,32 @@ function EmploymentStatusBadge({ status }) {
 }
 
 const FIXED_COLUMNS = [
-  { key: 'name',                    label: 'Name',             always: true,  fixed: true },
-  { key: 'role',                    label: 'Role/Dept',        always: false, fixed: true },
-  { key: 'contact_number',          label: 'Contact',          always: false, fixed: true },
-  { key: 'date_hired',              label: 'Date Hired',       always: false, fixed: true },
-  { key: 'assigned_branches',       label: 'Branches',         always: false, fixed: true },
-  { key: 'status',                  label: 'Status',           always: false, fixed: true },
-  { key: 'employment_status',       label: 'Employment Status',always: false, fixed: true },
-  { key: 'requirements_status',     label: 'Requirements',     always: false, fixed: true },
-  { key: 'nbi_status',              label: 'NBI',              always: false, fixed: true },
-  { key: 'medcert_status',          label: 'Medical',          always: false, fixed: true },
-  { key: 'police_clearance_status', label: 'Police Clearance', always: false, fixed: true },
-  { key: 'contract_status',         label: 'Contract',         always: false, fixed: true },
-  { key: 'sss',                     label: 'SSS',              always: false, fixed: true },
-  { key: 'pagibig',                 label: 'Pag-IBIG',         always: false, fixed: true },
-  { key: 'philhealth',              label: 'PhilHealth',       always: false, fixed: true },
-  { key: 'tin',                     label: 'TIN',              always: false, fixed: true },
+  { key: 'name',                    label: 'Name',              always: true,  fixed: true },
+  { key: 'role',                    label: 'Role/Dept',         always: false, fixed: true },
+  { key: 'contact_number',          label: 'Contact',           always: false, fixed: true },
+  { key: 'date_hired',              label: 'Date Hired',        always: false, fixed: true },
+  { key: 'assigned_branches',       label: 'Branches',          always: false, fixed: true },
+  { key: 'status',                  label: 'Status',            always: false, fixed: true },
+  { key: 'employment_status',       label: 'Employment Status', always: false, fixed: true },
+  { key: 'requirements_status',     label: 'Requirements',      always: false, fixed: true },
+  { key: 'nbi_status',              label: 'NBI',               always: false, fixed: true },
+  { key: 'medcert_status',          label: 'Medical',           always: false, fixed: true },
+  { key: 'police_clearance_status', label: 'Police Clearance',  always: false, fixed: true },
+  { key: 'contract_status',         label: 'Contract',          always: false, fixed: true },
+  { key: 'sss',                     label: 'SSS',               always: false, fixed: true },
+  { key: 'pagibig',                 label: 'Pag-IBIG',          always: false, fixed: true },
+  { key: 'philhealth',              label: 'PhilHealth',        always: false, fixed: true },
+  { key: 'tin',                     label: 'TIN',               always: false, fixed: true },
 ];
 
-const DEFAULT_VISIBLE = ['name', 'role', 'contact_number', 'date_hired', 'status', 'requirements_status', 'assigned_branches'];
+const DEFAULT_VISIBLE = [
+  'name', 'role', 'contact_number', 'date_hired',
+  'status', 'requirements_status', 'assigned_branches',
+];
 
 function CellValue({ colKey, user }) {
-  const fmt = (d) => d
-    ? new Date(d).toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' })
-    : '—';
+  const fmt = (d) =>
+    d ? new Date(d).toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' }) : '—';
 
   switch (colKey) {
     case 'name':
@@ -151,7 +154,7 @@ function CellValue({ colKey, user }) {
           </div>
         </div>
       );
-    case 'role':               return <RoleBadge role={user.roles?.[0]?.name} />;
+    case 'role':          return <RoleBadge role={user.roles?.[0]?.name} />;
     case 'contact_number':
       return (
         <div className="flex items-center gap-1.5 text-sm text-gray-600">
@@ -194,38 +197,63 @@ function CellValue({ colKey, user }) {
     case 'tin':        return <span className="text-sm font-mono text-gray-600">{user.tin || '—'}</span>;
     default:
       if (colKey.startsWith('custom_')) {
-        return <span className="text-sm text-gray-600">{user.custom_fields?.[colKey.replace('custom_', '')] || '—'}</span>;
+        return (
+          <span className="text-sm text-gray-600">
+            {user.custom_fields?.[colKey.replace('custom_', '')] || '—'}
+          </span>
+        );
       }
       return <span className="text-gray-400 text-xs">—</span>;
   }
 }
 
 // ── Add User Modal ────────────────────────────────────────────────────────────
+// FIX: role selector was bound to `sortBy` state instead of `form.role`.
+// All form fields are now properly bound to `form` state via the `set` helper.
+
 function UserModal({ onClose, onSaved, canManage }) {
   const [form, setForm] = useState({
-    name: '', email: '', password: '', role: 'hr_admin',
-    contact_number: '', date_hired: '',
-    nbi_status: 'pending', medcert_status: 'pending',
-    police_clearance_status: 'pending', contract_status: 'pending',
-    sss: '', pagibig: '', philhealth: '', tin: '',
-    requirements_status: 'pending',
-    employment_status: 'active',
+    name:                    '',
+    email:                   '',
+    password:                '',
+    role:                    'hr_admin',   // ← default role
+    contact_number:          '',
+    date_hired:              '',
+    nbi_status:              'pending',
+    medcert_status:          'pending',
+    police_clearance_status: 'pending',
+    contract_status:         'pending',
+    sss:                     '',
+    pagibig:                 '',
+    philhealth:              '',
+    tin:                     '',
+    requirements_status:     'pending',
+    employment_status:       'active',
   });
   const [saving, setSaving] = useState(false);
   const [error,  setError]  = useState('');
   const [tab,    setTab]    = useState('info');
+
+  // Single setter — avoids typos and keeps handlers clean
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
   const handleSave = async () => {
-    if (!form.name.trim() || !form.email.trim()) { setError('Name and email are required.'); return; }
-    if (!form.password.trim()) { setError('Password is required.'); return; }
+    if (!form.name.trim())     { setError('Name is required.');           return; }
+    if (!form.email.trim())    { setError('Email is required.');          return; }
+    if (!form.password.trim()) { setError('Password is required.');       return; }
+    if (!form.role)            { setError('Department/Role is required.'); return; }
+
     try {
       setSaving(true);
+      setError('');
       await userService.create(form);
-      onSaved(); onClose();
+      onSaved();
+      onClose();
     } catch (e) {
-      setError(e?.response?.data?.message || 'Failed to save.');
-    } finally { setSaving(false); }
+      setError(e?.response?.data?.message || 'Failed to save. Please try again.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const docOptions = [
@@ -234,84 +262,126 @@ function UserModal({ onClose, onSaved, canManage }) {
     { value: 'not_required', label: 'N/A'          },
   ];
 
+  // Reusable field wrapper
+  const Field = ({ label, children, span2 = false }) => (
+    <div className={span2 ? 'col-span-2' : ''}>
+      <label className="block text-xs font-semibold text-gray-500 mb-1">{label}</label>
+      {children}
+    </div>
+  );
+
+  const inputCls = "w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500";
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
       <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg flex flex-col max-h-[90vh]">
+
+        {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <h3 className="text-base font-semibold text-gray-900">Add Internal Employee</h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X className="h-5 w-5" /></button>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+            <X className="h-5 w-5" />
+          </button>
         </div>
 
+        {/* Tab switcher */}
         <div className="flex border-b border-gray-100 px-6">
           {['info', 'requirements'].map((t) => (
             <button key={t} onClick={() => setTab(t)}
               className={`py-3 px-4 text-sm font-medium border-b-2 transition-colors
-                ${tab === t ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+                ${tab === t
+                  ? 'border-blue-600 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
               {t === 'info' ? 'Basic Info' : 'Requirements'}
             </button>
           ))}
         </div>
 
+        {/* Body */}
         <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
+
           {tab === 'info' && (
             <div className="grid grid-cols-2 gap-4">
-              <div className="col-span-2">
-                <label className="block text-xs font-semibold text-gray-500 mb-1">Full Name *</label>
-                <input value={form.name} onChange={(e) => set('name', e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="Juan dela Cruz" />
-              </div>
-              <div className="col-span-2">
-                <label className="block text-xs font-semibold text-gray-500 mb-1">Email *</label>
-                <input type="email" value={form.email} onChange={(e) => set('email', e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="juan@company.com" />
-              </div>
-              <div className="col-span-2">
-                <label className="block text-xs font-semibold text-gray-500 mb-1">Password *</label>
-                <input type="password" value={form.password} onChange={(e) => set('password', e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="Min. 8 characters" />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-gray-500 mb-1">Department / Role *</label>
-               <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}
-  className="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-  <optgroup label="Sort by Date">
-    <option value="newest">Newest First</option>
-    <option value="oldest">Oldest First</option>
-  </optgroup>
-  <optgroup label="Sort by Name">
-    <option value="name_asc">Name A–Z</option>
-    <option value="name_desc">Name Z–A</option>
-  </optgroup>
-</select>
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-gray-500 mb-1">Contact Number</label>
-                <input value={form.contact_number} onChange={(e) => set('contact_number', e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="09XX XXX XXXX" />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-gray-500 mb-1">Date Hired</label>
-                <input type="date" value={form.date_hired} onChange={(e) => set('date_hired', e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-gray-500 mb-1">Employment Status</label>
-                <select value={form.employment_status} onChange={(e) => set('employment_status', e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+
+              <Field label="Full Name *" span2>
+                <input
+                  value={form.name}
+                  onChange={(e) => set('name', e.target.value)}
+                  className={inputCls}
+                  placeholder="Juan dela Cruz"
+                />
+              </Field>
+
+              <Field label="Email *" span2>
+                <input
+                  type="email"
+                  value={form.email}
+                  onChange={(e) => set('email', e.target.value)}
+                  className={inputCls}
+                  placeholder="juan@company.com"
+                />
+              </Field>
+
+              <Field label="Password *" span2>
+                <input
+                  type="password"
+                  value={form.password}
+                  onChange={(e) => set('password', e.target.value)}
+                  className={inputCls}
+                  placeholder="Min. 8 characters"
+                />
+              </Field>
+
+              {/* FIX: was bound to `sortBy` — now correctly bound to `form.role` */}
+              <Field label="Department / Role *">
+                <select
+                  value={form.role}
+                  onChange={(e) => set('role', e.target.value)}
+                  className={`${inputCls} bg-white`}
+                >
+                  <option value="hr_admin">HR</option>
+                  <option value="talent_acquisition">Talent Acquisition</option>
+                  <option value="accounting">Accounting</option>
+                  <option value="marketing">Marketing</option>
+                </select>
+              </Field>
+
+              <Field label="Contact Number">
+                <input
+                  value={form.contact_number}
+                  onChange={(e) => set('contact_number', e.target.value)}
+                  className={inputCls}
+                  placeholder="09XX XXX XXXX"
+                />
+              </Field>
+
+              <Field label="Date Hired">
+                <input
+                  type="date"
+                  value={form.date_hired}
+                  onChange={(e) => set('date_hired', e.target.value)}
+                  className={inputCls}
+                />
+              </Field>
+
+              <Field label="Employment Status">
+                <select
+                  value={form.employment_status}
+                  onChange={(e) => set('employment_status', e.target.value)}
+                  className={`${inputCls} bg-white`}
+                >
                   <option value="active">Active</option>
                   <option value="resigned">Resigned</option>
                   <option value="terminated">Terminated</option>
                   <option value="endo">Endo</option>
                   <option value="awol">AWOL</option>
                 </select>
-              </div>
+              </Field>
+
             </div>
           )}
+
           {tab === 'requirements' && (
             <>
               <div className="grid grid-cols-2 gap-3">
@@ -323,15 +393,23 @@ function UserModal({ onClose, onSaved, canManage }) {
                 ].map(({ field, label }) => (
                   <div key={field}>
                     <label className="block text-xs font-semibold text-gray-500 mb-1">{label}</label>
-                    <select value={form[field]} onChange={(e) => set(field, e.target.value)}
-                      className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
-                      {docOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                    <select
+                      value={form[field]}
+                      onChange={(e) => set(field, e.target.value)}
+                      className={`${inputCls} bg-white`}
+                    >
+                      {docOptions.map((o) => (
+                        <option key={o.value} value={o.value}>{o.label}</option>
+                      ))}
                     </select>
                   </div>
                 ))}
               </div>
+
               <div className="pt-2 border-t border-gray-50">
-                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Government IDs</p>
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">
+                  Government IDs
+                </p>
                 <div className="grid grid-cols-2 gap-3">
                   {[
                     { field: 'sss',        label: 'SSS No.'        },
@@ -341,17 +419,26 @@ function UserModal({ onClose, onSaved, canManage }) {
                   ].map(({ field, label }) => (
                     <div key={field}>
                       <label className="block text-xs font-semibold text-gray-500 mb-1">{label}</label>
-                      <input value={form[field]} onChange={(e) => set(field, e.target.value)}
-                        className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
-                        placeholder="—" />
+                      <input
+                        value={form[field]}
+                        onChange={(e) => set(field, e.target.value)}
+                        className={`${inputCls} font-mono`}
+                        placeholder="—"
+                      />
                     </div>
                   ))}
                 </div>
               </div>
+
               <div className="pt-2 border-t border-gray-50">
-                <label className="block text-xs font-semibold text-gray-500 mb-1">Overall Requirements Status</label>
-                <select value={form.requirements_status} onChange={(e) => set('requirements_status', e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <label className="block text-xs font-semibold text-gray-500 mb-1">
+                  Overall Requirements Status
+                </label>
+                <select
+                  value={form.requirements_status}
+                  onChange={(e) => set('requirements_status', e.target.value)}
+                  className={`${inputCls} bg-white`}
+                >
                   <option value="complete">✓ Complete</option>
                   <option value="incomplete">✗ Incomplete</option>
                   <option value="pending">⏳ Pending</option>
@@ -361,6 +448,7 @@ function UserModal({ onClose, onSaved, canManage }) {
           )}
         </div>
 
+        {/* Footer */}
         <div className="px-6 py-4 border-t border-gray-100">
           {error && <p className="text-xs text-red-500 mb-3">{error}</p>}
           <div className="flex gap-2 justify-end">
@@ -368,13 +456,17 @@ function UserModal({ onClose, onSaved, canManage }) {
               className="px-4 py-2 text-sm text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
               Cancel
             </button>
-            <button onClick={handleSave} disabled={saving || !canManage}
-              className="px-5 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors flex items-center gap-2">
+            <button
+              onClick={handleSave}
+              disabled={saving || !canManage}
+              className="px-5 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors flex items-center gap-2"
+            >
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-              Add Employee
+              {saving ? 'Saving...' : 'Add Employee'}
             </button>
           </div>
         </div>
+
       </div>
     </div>
   );
@@ -401,8 +493,6 @@ export default function InternalEmployeesPage() {
   const [reqFilter,       setReqFilter]       = useState('');
   const [empStatusFilter, setEmpStatusFilter] = useState('active');
   const [sortBy,          setSortBy]          = useState('newest');
-  const [showSortPicker,  setShowSortPicker]  = useState(false);
-  const sortRef = useRef(null);
 
   // ── Column management ─────────────────────────────────────────────────────
   const { visibleCols, colOrder, toggleColumn: _toggleColumn, setColOrder } =
@@ -420,28 +510,26 @@ export default function InternalEmployeesPage() {
   const userRole  = currentUser?.roles?.[0]?.name ?? '';
   const canManage = userRole === 'super_admin' || userRole === 'hr_admin';
 
-  // Close sort picker on outside click
-  useEffect(() => {
-    const handler = (e) => {
-      if (sortRef.current && !sortRef.current.contains(e.target)) {
-        setShowSortPicker(false);
-      }
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, []);
-
   useEffect(() => { fetchCustomCols(); }, []);
-  useEffect(() => { fetchUsers(); }, [debouncedSearch, activeTab, reqFilter, empStatusFilter, sortBy, currentPage, perPage]);
-  useEffect(() => { setCurrentPage(1); }, [debouncedSearch, activeTab, reqFilter, empStatusFilter, sortBy, perPage]);
+
+  useEffect(() => {
+    fetchUsers();
+  }, [debouncedSearch, activeTab, reqFilter, empStatusFilter, sortBy, currentPage, perPage]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [debouncedSearch, activeTab, reqFilter, empStatusFilter, sortBy, perPage]);
 
   const fetchUsers = async () => {
     try {
       setLoading(true);
       const { sort, direction } = SORT_MAP[sortBy] || SORT_MAP.newest;
       const params = {
-        page: currentPage, per_page: perPage, search: debouncedSearch,
-        sort, direction,
+        page:      currentPage,
+        per_page:  perPage,
+        search:    debouncedSearch,
+        sort,
+        direction,
         ...(activeTab       && { role: activeTab }),
         ...(reqFilter       && { requirements_status: reqFilter }),
         ...(empStatusFilter && { employment_status: empStatusFilter }),
@@ -450,8 +538,11 @@ export default function InternalEmployeesPage() {
       setUsers(res.data || []);
       setTotalPages(res.last_page || 1);
       setTotal(res.total || 0);
-    } catch (e) { console.error(e); }
-    finally { setLoading(false); }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const fetchCustomCols = async () => {
@@ -463,36 +554,49 @@ export default function InternalEmployeesPage() {
 
   const handleToggleStatus = async (user) => {
     if (!canManage) return;
-    try { await userService.updateStatus(user.id, !user.is_active); fetchUsers(); }
-    catch (e) { console.error(e); }
+    try {
+      await userService.updateStatus(user.id, !user.is_active);
+      fetchUsers();
+    } catch (e) { console.error(e); }
   };
 
   const allColumnsWithCustom = [
     ...FIXED_COLUMNS,
-    ...customCols.map((c) => ({ key: `custom_${c.field_key}`, label: c.label, always: false, fixed: false, custom: true })),
+    ...customCols.map((c) => ({
+      key:    `custom_${c.field_key}`,
+      label:  c.label,
+      always: false,
+      fixed:  false,
+      custom: true,
+    })),
   ];
 
-  const toggleColumn = (key) => _toggleColumn(key, allColumnsWithCustom);
+  const toggleColumn  = (key) => _toggleColumn(key, allColumnsWithCustom);
   const activeColumns = colOrder.filter((k) => visibleCols.includes(k));
 
   const onDragStart = (key) => { dragCol.current = key; setDragKey(key); };
   const onDragEnter = (key) => { dragOverCol.current = key; setDragOverKey(key); };
   const onDragEnd   = () => {
-    setDragOverKey(null); setDragKey(null);
+    setDragOverKey(null);
+    setDragKey(null);
     if (!dragCol.current || !dragOverCol.current || dragCol.current === dragOverCol.current) {
       dragCol.current = null; dragOverCol.current = null; return;
     }
     const newOrder = [...colOrder];
     const from = newOrder.indexOf(dragCol.current);
     const to   = newOrder.indexOf(dragOverCol.current);
-    newOrder.splice(from, 1); newOrder.splice(to, 0, dragCol.current);
+    newOrder.splice(from, 1);
+    newOrder.splice(to, 0, dragCol.current);
     setColOrder(newOrder);
     dragCol.current = null; dragOverCol.current = null;
   };
 
   const clearFilters = () => {
-    setSearchInput(''); setReqFilter(''); setEmpStatusFilter('active');
-    setSortBy('newest'); setCurrentPage(1);
+    setSearchInput('');
+    setReqFilter('');
+    setEmpStatusFilter('active');
+    setSortBy('newest');
+    setCurrentPage(1);
   };
 
   const hasFilters = searchInput || reqFilter || empStatusFilter !== 'active' || sortBy !== 'newest';
@@ -501,7 +605,7 @@ export default function InternalEmployeesPage() {
     <DashboardLayout>
       <div className="space-y-6">
 
-        {/* Header */}
+        {/* ── Header ──────────────────────────────────────────────────────── */}
         <div className="flex items-start justify-between">
           <div>
             <div className="flex items-center gap-2">
@@ -519,49 +623,68 @@ export default function InternalEmployeesPage() {
           </div>
           <div className="flex items-center gap-2">
             {canManage && (
-              <button onClick={() => setShowManageCols(true)}
-                className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors shadow-sm">
+              <button
+                onClick={() => setShowManageCols(true)}
+                className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors shadow-sm"
+              >
                 <Settings2 className="h-4 w-4" /> Manage Columns
               </button>
             )}
             {canManage && (
-              <button onClick={() => setShowAddModal(true)}
-                className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-colors shadow-sm">
+              <button
+                onClick={() => setShowAddModal(true)}
+                className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-colors shadow-sm"
+              >
                 <Plus className="h-4 w-4" /> Add Employee
               </button>
             )}
           </div>
         </div>
 
-        {/* Dept Tabs */}
+        {/* ── Dept Tabs ────────────────────────────────────────────────────── */}
         <div className="flex items-center gap-1 bg-white rounded-xl border border-gray-100 shadow-sm p-1 overflow-x-auto">
           {DEPT_TABS.map((tab) => (
             <button key={tab.key} onClick={() => setActiveTab(tab.key)}
               className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap transition-all
-                ${activeTab === tab.key ? 'bg-indigo-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'}`}>
+                ${activeTab === tab.key
+                  ? 'bg-indigo-600 text-white shadow-sm'
+                  : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'}`}>
               {tab.label}
             </button>
           ))}
         </div>
 
-        {/* Filters */}
+        {/* ── Filters ──────────────────────────────────────────────────────── */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 space-y-3">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
-              <input type="text" value={searchInput} onChange={(e) => setSearchInput(e.target.value)}
+              <input
+                type="text"
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
                 placeholder="Search name, email or contact..."
-                className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              />
             </div>
-            <select value={reqFilter} onChange={(e) => setReqFilter(e.target.value)}
-              className="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+
+            <select
+              value={reqFilter}
+              onChange={(e) => setReqFilter(e.target.value)}
+              className="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            >
               <option value="">All Requirements</option>
               <option value="complete">✓ Complete</option>
               <option value="incomplete">✗ Incomplete</option>
               <option value="pending">⏳ Pending</option>
             </select>
-            <select value={empStatusFilter} onChange={(e) => setEmpStatusFilter(e.target.value)}
-              className="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+
+            <select
+              value={empStatusFilter}
+              onChange={(e) => setEmpStatusFilter(e.target.value)}
+              className="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            >
               <option value="">All Employment Status</option>
               <option value="active">Active</option>
               <option value="resigned">Resigned</option>
@@ -569,26 +692,37 @@ export default function InternalEmployeesPage() {
               <option value="endo">Endo</option>
               <option value="awol">AWOL</option>
             </select>
-             <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}
-    className="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-    <optgroup label="Sort by Date">
-      <option value="newest">Newest First</option>
-      <option value="oldest">Oldest First</option>
-    </optgroup>
-    <optgroup label="Sort by Name">
-      <option value="name_asc">Name A–Z</option>
-      <option value="name_desc">Name Z–A</option>
-    </optgroup>
-  </select>
+
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value)}
+              className="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            >
+              <optgroup label="Sort by Date">
+                <option value="newest">Newest First</option>
+                <option value="oldest">Oldest First</option>
+              </optgroup>
+              <optgroup label="Sort by Name">
+                <option value="name_asc">Name A–Z</option>
+                <option value="name_desc">Name Z–A</option>
+              </optgroup>
+            </select>
+
           </div>
 
+          {/* Bottom row */}
           <div className="flex items-center justify-between pt-2 border-t border-gray-50">
-            {/* Columns picker */}
+
+            {/* Column picker */}
             <div className="relative">
-              <button onClick={() => setShowColPicker((v) => !v)}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">
+              <button
+                onClick={() => setShowColPicker((v) => !v)}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+              >
                 <Filter className="h-3.5 w-3.5" /> Columns
-                <span className="bg-indigo-600 text-white rounded-full px-1.5 py-0.5 text-xs ml-0.5">{activeColumns.length}</span>
+                <span className="bg-indigo-600 text-white rounded-full px-1.5 py-0.5 text-xs ml-0.5">
+                  {activeColumns.length}
+                </span>
               </button>
               {showColPicker && (
                 <div className="absolute top-full left-0 mt-1 z-30 bg-white rounded-xl shadow-lg border border-gray-100 p-3 w-64">
@@ -597,15 +731,21 @@ export default function InternalEmployeesPage() {
                       <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Show / Hide</span>
                       <p className="text-xs text-gray-400 mt-0.5">Changes apply only to your account</p>
                     </div>
-                    <button onClick={() => setShowColPicker(false)}><X className="h-4 w-4 text-gray-400 hover:text-gray-600" /></button>
+                    <button onClick={() => setShowColPicker(false)}>
+                      <X className="h-4 w-4 text-gray-400 hover:text-gray-600" />
+                    </button>
                   </div>
                   <div className="space-y-1 max-h-64 overflow-y-auto">
                     {allColumnsWithCustom.map((col) => (
                       <label key={col.key}
                         className={`flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer hover:bg-gray-50 ${col.always ? 'opacity-50 cursor-not-allowed' : ''}`}>
-                        <input type="checkbox" checked={visibleCols.includes(col.key)}
-                          onChange={() => toggleColumn(col.key)} disabled={col.always}
-                          className="rounded text-indigo-600" />
+                        <input
+                          type="checkbox"
+                          checked={visibleCols.includes(col.key)}
+                          onChange={() => toggleColumn(col.key)}
+                          disabled={col.always}
+                          className="rounded text-indigo-600"
+                        />
                         <span className="text-sm text-gray-700">
                           {col.label}
                           {col.custom && <span className="ml-1 text-xs text-blue-400">✦</span>}
@@ -617,28 +757,33 @@ export default function InternalEmployeesPage() {
               )}
             </div>
 
-            {/* Right side: clear + sort + rows */}
-           <div className="flex items-center gap-3">
-  {hasFilters && (
-    <button onClick={clearFilters} className="text-xs text-red-400 hover:text-red-600 flex items-center gap-1">
-      <X className="h-3 w-3" /> Clear filters
-    </button>
-  )}
- 
-  <div className="flex items-center gap-1.5 text-xs text-gray-400">
-    <span>Rows:</span>
-    <select value={perPage} onChange={(e) => setPerPage(Number(e.target.value))}
-      className="text-xs border border-gray-200 rounded px-1.5 py-1 focus:outline-none">
-      <option value={15}>15</option>
-      <option value={30}>30</option>
-      <option value={50}>50</option>
-    </select>
-  </div>
-</div>
+            {/* Right side: clear + rows */}
+            <div className="flex items-center gap-3">
+              {hasFilters && (
+                <button
+                  onClick={clearFilters}
+                  className="text-xs text-red-400 hover:text-red-600 flex items-center gap-1"
+                >
+                  <X className="h-3 w-3" /> Clear filters
+                </button>
+              )}
+              <div className="flex items-center gap-1.5 text-xs text-gray-400">
+                <span>Rows:</span>
+                <select
+                  value={perPage}
+                  onChange={(e) => setPerPage(Number(e.target.value))}
+                  className="text-xs border border-gray-200 rounded px-1.5 py-1 focus:outline-none"
+                >
+                  <option value={15}>15</option>
+                  <option value={30}>30</option>
+                  <option value={50}>50</option>
+                </select>
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* Table */}
+        {/* ── Table ───────────────────────────────────────────────────────── */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
           {loading ? (
             <div className="flex items-center justify-center py-16 text-gray-400 text-sm">
@@ -660,7 +805,9 @@ export default function InternalEmployeesPage() {
                       {activeColumns.map((key) => {
                         const col = allColumnsWithCustom.find((c) => c.key === key);
                         return (
-                          <th key={key} draggable
+                          <th
+                            key={key}
+                            draggable
                             onDragStart={() => onDragStart(key)}
                             onDragEnter={() => onDragEnter(key)}
                             onDragEnd={onDragEnd}
@@ -690,22 +837,30 @@ export default function InternalEmployeesPage() {
                     {users.map((u) => (
                       <tr key={u.id} className="hover:bg-gray-50 transition-colors group">
                         {activeColumns.map((key) => (
-                          <td key={key}
-                            className={`px-4 py-3.5 whitespace-nowrap transition-colors ${dragOverKey === key ? 'bg-indigo-50' : ''}`}>
+                          <td
+                            key={key}
+                            className={`px-4 py-3.5 whitespace-nowrap transition-colors ${dragOverKey === key ? 'bg-indigo-50' : ''}`}
+                          >
                             <CellValue colKey={key} user={u} />
                           </td>
                         ))}
                         <td className="px-4 py-3.5 text-right">
                           <div className="flex items-center justify-end gap-1">
-                            <Link to={`/internal/users/${u.id}`}
-                              className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors">
+                            <Link
+                              to={`/internal/users/${u.id}`}
+                              className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                            >
                               View <ChevronRight className="h-3.5 w-3.5" />
                             </Link>
                             {canManage && (
-                              <button onClick={() => handleToggleStatus(u)}
+                              <button
+                                onClick={() => handleToggleStatus(u)}
                                 className={`p-1.5 rounded-lg transition-colors ${u.is_active ? 'text-red-400 hover:bg-red-50' : 'text-green-500 hover:bg-green-50'}`}
-                                title={u.is_active ? 'Deactivate' : 'Activate'}>
-                                {u.is_active ? <UserX className="h-3.5 w-3.5" /> : <UserCheck className="h-3.5 w-3.5" />}
+                                title={u.is_active ? 'Deactivate' : 'Activate'}
+                              >
+                                {u.is_active
+                                  ? <UserX className="h-3.5 w-3.5" />
+                                  : <UserCheck className="h-3.5 w-3.5" />}
                               </button>
                             )}
                           </div>
@@ -724,12 +879,18 @@ export default function InternalEmployeesPage() {
                     <span className="ml-1 text-gray-400">({total} total)</span>
                   </p>
                   <div className="flex items-center gap-1">
-                    <button onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))} disabled={currentPage === 1}
-                      className="px-3 py-1.5 text-xs border border-gray-200 rounded-lg bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                    <button
+                      onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
+                      disabled={currentPage === 1}
+                      className="px-3 py-1.5 text-xs border border-gray-200 rounded-lg bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    >
                       Previous
                     </button>
-                    <button onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))} disabled={currentPage === totalPages}
-                      className="px-3 py-1.5 text-xs border border-gray-200 rounded-lg bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                    <button
+                      onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
+                      disabled={currentPage === totalPages}
+                      className="px-3 py-1.5 text-xs border border-gray-200 rounded-lg bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    >
                       Next
                     </button>
                   </div>
@@ -738,13 +899,17 @@ export default function InternalEmployeesPage() {
             </>
           )}
         </div>
+
       </div>
 
       {showAddModal && (
-        <UserModal canManage={canManage}
+        <UserModal
+          canManage={canManage}
           onClose={() => setShowAddModal(false)}
-          onSaved={fetchUsers} />
+          onSaved={fetchUsers}
+        />
       )}
+
       {showManageCols && (
         <ManageColumnsModal
           page="internal_employees"
@@ -752,6 +917,7 @@ export default function InternalEmployeesPage() {
           onSaved={fetchCustomCols}
         />
       )}
+
     </DashboardLayout>
   );
 }

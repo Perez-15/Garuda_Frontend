@@ -1,4 +1,3 @@
-// pages/External/Applicants/ApplicantDetailPage.jsx
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
@@ -385,36 +384,52 @@ export default function ApplicantDetailPage() {
                     </select>
                   </div>
                 </form>
-              ) : (
-                <div className="space-y-3">
-                  <div className="flex items-center text-gray-600">
-                    <Mail className="h-5 w-5 mr-3 flex-shrink-0" />
-                    <span>{applicant.email || '—'}</span>
-                  </div>
-                  <div className="flex items-center text-gray-600">
-                    <Phone className="h-5 w-5 mr-3 flex-shrink-0" />
-                    <span>{applicant.phone || '—'}</span>
-                  </div>
-                  <div className="flex items-center text-gray-600">
-                    <Building2 className="h-5 w-5 mr-3 flex-shrink-0" />
-                    <span>{applicant.branch?.branch_name} — {applicant.branch?.client?.name}</span>
-                  </div>
-                  <div className="flex items-center text-gray-600">
-                    <FileText className="h-5 w-5 mr-3 flex-shrink-0" />
-                    <span>Source: {applicant.source || '—'}</span>
-                  </div>
-                  {addedByName && (
-                    <div className="flex items-center gap-3 pt-3 mt-1 border-t border-gray-100">
-                      <UserPlus className="h-5 w-5 text-emerald-500 flex-shrink-0" />
-                      <div>
-                        <span className="text-xs text-gray-400 block">Added by</span>
-                        <span className="text-sm font-medium text-gray-700">{addedByName}</span>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
+           ) : (
+  <div className="space-y-3">
+    <div className="flex items-center text-gray-600">
+      <Mail className="h-5 w-5 mr-3 flex-shrink-0" />
+      <span>{applicant.email || '—'}</span>
+    </div>
+    <div className="flex items-center text-gray-600">
+      <Phone className="h-5 w-5 mr-3 flex-shrink-0" />
+      <span>{applicant.phone || '—'}</span>
+    </div>
+    <div className="flex items-center text-gray-600">
+      <Building2 className="h-5 w-5 mr-3 flex-shrink-0" />
+      <span>{applicant.branch?.branch_name} — {applicant.branch?.client?.name}</span>
+    </div>
+    <div className="flex items-center text-gray-600">
+      <FileText className="h-5 w-5 mr-3 flex-shrink-0" />
+      <span>Source: {applicant.source || '—'}</span>
+    </div>
+
+   {/* Resume */}
+    {applicant.resume_url && (
+      <div className="flex items-center text-gray-600">
+        <FileText className="h-5 w-5 mr-3 flex-shrink-0" />
+        {/* ↓ opening <a> tag added here */}
+        <a href={applicant.resume_url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-blue-600 hover:underline text-sm"
+        >
+          View Resume
+        </a>
+      </div>
+    )}
+
+    {addedByName && (
+      <div className="flex items-center gap-3 pt-3 mt-1 border-t border-gray-100">
+        <UserPlus className="h-5 w-5 text-emerald-500 flex-shrink-0" />
+        <div>
+          <span className="text-xs text-gray-400 block">Added by</span>
+          <span className="text-sm font-medium text-gray-700">{addedByName}</span>
+        </div>
+      </div>
+    )}
+  </div>
+)}
+</div>  
 
             {/* Workflow Progress */}
             <div className="bg-white shadow rounded-lg p-6">

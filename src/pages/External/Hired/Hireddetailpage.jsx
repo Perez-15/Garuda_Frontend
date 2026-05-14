@@ -715,6 +715,22 @@ export default function EmployeeDetailPage() {
                   <InfoRow label="Date Resigned / Ended" value={fmt(employee.date_resigned || employee.date_ended)} />
                   <InfoRow label="Daily Rate"            value={employee.daily_rate ? `₱${Number(employee.daily_rate).toLocaleString()}` : null} />
                   <InfoRow label="Source"                value={employee.source} />
+                  {employee.applicant?.resume_url && (
+  <InfoRow
+    label="Resume"
+    value={
+      
+       <a href={employee.applicant.resume_url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-blue-600 hover:underline text-sm"
+      >
+        View Resume
+      </a>
+    }
+  />
+)}
+
                   <InfoRow label="Remarks"               value={employee.remarks} />
                 </div>
               ) : (
@@ -739,7 +755,7 @@ export default function EmployeeDetailPage() {
                   <div className="col-span-2">
                     <Field label="Source" name="source" value={form.source} onChange={handleChange}
                       options={[
-                        { value: 'WordPress', label: 'WordPress' },
+                        { value: 'Website', label: 'Website' },
                         { value: 'Gmail',     label: 'Gmail'     },
                         { value: 'Facebook',  label: 'Facebook'  },
                         { value: 'BossJobs',  label: 'Boss Jobs' },
@@ -831,7 +847,7 @@ export default function EmployeeDetailPage() {
                   <Field label="Date Ended"    name="date_ended"    type="date"   value={form.date_ended}    onChange={handleChange} />
                   <Field label="Source" name="source" value={form.source} onChange={handleChange}
                     options={[
-                      { value: 'WordPress', label: 'WordPress' },
+                      { value: 'Website', label: 'Website' },
                       { value: 'Gmail',     label: 'Gmail'     },
                       { value: 'Facebook',  label: 'Facebook'  },
                       { value: 'BossJobs',  label: 'Boss Jobs' },

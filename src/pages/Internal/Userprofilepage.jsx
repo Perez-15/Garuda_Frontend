@@ -1,4 +1,3 @@
-// pages/Internal/UserProfilePage.jsx
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
@@ -89,6 +88,8 @@ const SECTION_COLORS = {
   'Government IDs':           'text-amber-500',
   'Documents & Requirements': 'text-green-500',
 };
+
+
 
 // ── Badges ────────────────────────────────────────────────────────────────────
 function RoleBadge({ role }) {
@@ -395,6 +396,11 @@ export default function UserProfilePage() {
     return fields.some((f) => canEditField(f.field_key));
   }, [canEditField]);
 
+  const canViewSection = useCallback((sectionName) => {
+  if (canManage) return true;
+  return sectionName === 'Personal Information';
+}, [canManage]);
+
   const showToast = useCallback((type, message) => {
     setToast({ type, message });
     setTimeout(() => setToast(null), 4000);
@@ -681,9 +687,9 @@ export default function UserProfilePage() {
           </div>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {schema.map((sec) => (
-              <SectionCard
-                key={sec.name}
+           {schema.filter((sec) => canViewSection(sec.name)).map((sec) => (
+          <SectionCard
+            key={sec.name}
                 title={sec.name}
                 fields={sec.fields}
                 profile={profile}

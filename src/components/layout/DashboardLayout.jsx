@@ -33,67 +33,53 @@ export default function DashboardLayout({ children }) {
   const navigate                        = useNavigate();
   const location                        = useLocation();
 
-  const userRole    = user?.roles?.[0]?.name;
-  const isTA        = userRole === 'talent_acquisition';
-  const isAdmin     = userRole === 'super_admin' || userRole === 'hr_admin';
-  const isMarketing = userRole === 'marketing';
+  const userRole     = user?.roles?.[0]?.name;
+  const isTA         = userRole === 'talent_acquisition';
+  const isAdmin      = userRole === 'super_admin' || userRole === 'hr_admin';
+  const isMarketing  = userRole === 'marketing';
   const isAccounting = userRole === 'accounting';
 
-  // Roles that are allowed to see the website applications badge.
-  // Matches the ADMIN_TA group from ProtectedRoute — keep these in sync.
   const canSeeWebsiteApplications = isAdmin || isTA;
 
   // ── Logout ─────────────────────────────────────────────────────────────────
-  // FIX: Wrapped in try/finally so navigate('/login') always runs even if
-  // logout() throws a network error. Without this, a failed logout call
-  // leaves the user stuck on the dashboard with a broken session state.
   const handleLogout = async () => {
     try {
       await logout();
     } catch {
-      // logout failed on the server side (network error, etc.)
-      // We still want to clear the local session and redirect.
+      // Logout failed server-side — still clear local session and redirect
     } finally {
       navigate('/login');
     }
   };
 
   // ── Fetch pending website applications badge count ─────────────────────────
-  // FIX 1: Only fetch if the user's role can actually see website applications.
-  //         Accounting and marketing were hitting this endpoint unnecessarily.
-  // FIX 2: Skip the fetch when the browser tab is hidden to avoid wasting
-  //         API calls when the user isn't even looking at the page.
-  // FIX 3: Properly handle 401/403 responses — if the API rejects us,
-  //         we log the user out instead of silently swallowing the error.
+  // FIX: A 403 on this endpoint means the user doesn't have access to website
+  // applications — that is expected for some roles. We must NOT call logout()
+  // on a 403 here because it would kick the user out of the dashboard on load.
+  // Only 401 (expired/invalid token) should trigger a logout.
   useEffect(() => {
-    // Don't set up polling at all for roles that can't see this page.
     if (!canSeeWebsiteApplications) return;
 
     const fetchBadge = async () => {
-      // Skip the API call if the tab is not visible.
-      // document.hidden is true when the user switches tabs or minimizes.
       if (document.hidden) return;
 
       try {
         const res = await websiteApplicationService.getPendingCount();
         setPendingCount(res.data.count);
       } catch (error) {
-        // If the server returns 401 (expired session) or 403 (no permission),
-        // force a logout instead of silently ignoring it. Any other error
-        // (network timeout, 500, etc.) is ignored — badge just won't update.
         const status = error?.response?.status;
-        if (status === 401 || status === 403) {
+        // 401 = session expired → force logout
+        // 403 = no permission → silently ignore, badge stays at 0
+        // anything else (network, 500) → silently ignore
+        if (status === 401) {
           await handleLogout();
         }
+        // Do NOT logout on 403 — it is not a session error
       }
     };
 
-    // Run immediately on mount, then every 60 seconds.
     fetchBadge();
     const interval = setInterval(fetchBadge, 60000);
-
-    // Cleanup: cancel the interval when the component unmounts (e.g. on logout).
-    // This prevents the interval from firing after the user has left the page.
     return () => clearInterval(interval);
   }, [canSeeWebsiteApplications]);
 
@@ -105,13 +91,12 @@ export default function DashboardLayout({ children }) {
   const applicantsOpen = isStartsWith('/applicants') || isStartsWith('/in-process') || isStartsWith('/employees');
   const attendanceOpen = isStartsWith('/attendance');
   const settingsOpen   =
-    isStartsWith('/clients')         ||
-    isStartsWith('/branches')        ||
-    isStartsWith('/manage-columns')  ||
-    isStartsWith('/workflows')       ||
+    isStartsWith('/clients')        ||
+    isStartsWith('/branches')       ||
+    isStartsWith('/manage-columns') ||
+    isStartsWith('/workflows')      ||
     isStartsWith('/recently-deleted');
 
-  // ── Lifted group toggle state (keyed by group name) ────────────────────────
   const [openGroups, setOpenGroups] = useState({
     External:   applicantsOpen,
     Attendance: attendanceOpen,
@@ -144,12 +129,11 @@ export default function DashboardLayout({ children }) {
         { name: 'Employed',   href: '/employees',  icon: UserCheck },
       ],
     },
-    {
-      name: 'Internal',
-      href: '/internal/employees',
-      icon: UsersIcon,
-      hidden: isMarketing,
-    },
+   {
+  name: 'Internal',
+  href: '/internal/employees',
+  icon: UsersIcon,
+},
 
     ...(isAdmin
       ? [{ name: 'Performance', href: '/performance', icon: TrendingUp }]
@@ -178,7 +162,6 @@ export default function DashboardLayout({ children }) {
       href: '/website-applications',
       icon: Globe,
       badge: pendingCount,
-      // Only show to roles that can actually access this page.
       hidden: !canSeeWebsiteApplications,
     },
 
@@ -186,11 +169,10 @@ export default function DashboardLayout({ children }) {
       name: 'Clients',
       icon: Building2,
       group: true,
-      // No hidden flag — all authenticated roles including marketing can see clients
       children: [
-        { name: 'All Clients', href: '/clients',           icon: Building2 },
-        { name: 'Prospects',   href: '/clients/prospects', icon: Users     },
-      ],
+  { name: 'All Clients', href: '/clients',           icon: Building2 },
+  { name: 'Prospects',   href: '/clients/prospects', icon: Users, hidden: isTA || isAccounting },
+].filter((child) => !child.hidden),
     },
 
     {
@@ -208,10 +190,7 @@ export default function DashboardLayout({ children }) {
           ? [{ name: 'Users', href: '/users', icon: UsersIcon }]
           : []),
 
-        // Recently Deleted is admin only — accounting and others are excluded.
-       
-           { name: 'Recently Deleted', href: '/recently-deleted', icon: Trash2 }
-          
+        { name: 'Recently Deleted', href: '/recently-deleted', icon: Trash2 },
 
       ].filter((child) => !child.hidden),
     },
@@ -232,10 +211,10 @@ export default function DashboardLayout({ children }) {
   const NavItem = ({ item, onLinkClick }) => {
     if (item.group) {
       const isGroupActive =
-        item.name === 'External'   ? applicantsOpen          :
-        item.name === 'Attendance' ? attendanceOpen           :
-        item.name === 'Clients'    ? isStartsWith('/clients') :
-        item.name === 'Settings'   ? settingsOpen             :
+        item.name === 'External'   ? applicantsOpen           :
+        item.name === 'Attendance' ? attendanceOpen            :
+        item.name === 'Clients'    ? isStartsWith('/clients')  :
+        item.name === 'Settings'   ? settingsOpen              :
         false;
 
       const isOpen = openGroups[item.name] || isGroupActive;
@@ -294,7 +273,6 @@ export default function DashboardLayout({ children }) {
       );
     }
 
-    // Regular link (with optional badge)
     return (
       <Link
         to={item.href}

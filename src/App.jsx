@@ -117,21 +117,16 @@ function App() {
             </ProtectedRoute>
           } />
 
-          {/* ── Internal Employees — NON_MARKETING ────────────────────────────
-              Accounting needs to see internal employees for payroll purposes.
-              Marketing is excluded.                                         */}
-          <Route path="/internal/employees" element={
-            <ProtectedRoute allowedRoles={ROLES.NON_MARKETING}>
-              <InternalEmployeesPage />
-            </ProtectedRoute>
-          } />
-          {/* SECURITY FIX: This route had no ProtectedRoute wrapper at all
-              in the original code. Any unauthenticated visitor could open it. */}
-          <Route path="/internal/users/:id" element={
-            <ProtectedRoute allowedRoles={ROLES.NON_MARKETING}>
-              <UserProfilePage />
-            </ProtectedRoute>
-          } />
+        <Route path="/internal/employees" element={
+          <ProtectedRoute>
+            <InternalEmployeesPage />
+          </ProtectedRoute>
+        } />
+        <Route path="/internal/users/:id" element={
+          <ProtectedRoute>
+            <UserProfilePage />
+          </ProtectedRoute>
+        } />
 
           {/* ── Attendance (own) — ALL roles ───────────────────────────────────
               Every employee can view their own attendance.                  */}
@@ -156,7 +151,7 @@ function App() {
   </ProtectedRoute>
 } />
 <Route path="/clients/prospects" element={
-  <ProtectedRoute>
+  <ProtectedRoute allowedRoles={['super_admin', 'hr_admin', 'marketing']}>
     <ClientProspectsPage />
   </ProtectedRoute>
 } />
