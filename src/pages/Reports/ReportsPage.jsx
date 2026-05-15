@@ -1,4 +1,3 @@
-// pages/Reports/ReportsPage.jsx
 import { useState, useEffect, useRef } from 'react';
 import {
   Download, TrendingUp, Users, CheckCircle,

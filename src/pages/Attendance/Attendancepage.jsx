@@ -1,4 +1,3 @@
-// pages/Attendance/AttendancePage.jsx
 import React, { useEffect, useState, useCallback } from 'react';
 import {
   getTodayAttendance,

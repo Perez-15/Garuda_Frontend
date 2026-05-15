@@ -1,4 +1,3 @@
-// pages/Dashboard/Dashboard.jsx
 import { useState, useEffect } from 'react';
 import {
   UserCheck, Building2, UserCog, ClipboardList,

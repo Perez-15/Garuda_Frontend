@@ -1,4 +1,3 @@
-// pages/External/Hired/HiredPage.jsx
 import { useState, useEffect, useRef } from 'react';
 import {
   Search, UserCheck, Building2, CalendarDays, ChevronRight,

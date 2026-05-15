@@ -1,4 +1,3 @@
-// pages/Performance/PerformancePage.jsx
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
