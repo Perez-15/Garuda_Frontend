@@ -59,7 +59,7 @@ export default function ApplicantDetailPage() {
   // ── Convert to Employee modal ───────────────────────────────────────────
   const [showConvertModal, setShowConvertModal] = useState(false);
   const [converting, setConverting]             = useState(false);
-  const [convertForm, setConvertForm]           = useState({ date_hired: '', daily_rate: '', remarks: '', position_id: '' });
+  const [convertForm, setConvertForm] = useState({ date_hired: '', daily_rate: '', remarks: '', position: '' });
   const [convertError, setConvertError]         = useState('');
 
   useEffect(() => { fetchApplicant(); }, [id]);
@@ -192,6 +192,8 @@ export default function ApplicantDetailPage() {
     try {
       setConverting(true);
       const res = await employeeService.convertFromApplicant(id, convertForm);
+       console.log('Convert response:', res);        // ← add this
+    console.log('Employee ID:', res.employee?.id); // ← and this
       setShowConvertModal(false);
       navigate(`/employees/${res.employee.id}`);
     } catch (error) {
@@ -706,6 +708,7 @@ export default function ApplicantDetailPage() {
             )}
 
             <div className="space-y-3">
+              
               <Field
                 label="Date Hired" name="date_hired" type="date"
                 value={convertForm.date_hired}
@@ -713,11 +716,20 @@ export default function ApplicantDetailPage() {
                 required
               />
               <Field
+            label="Position"
+            name="position"
+            type="text"
+            value={convertForm.position}
+            onChange={handleConvertChange}
+            placeholder="e.g. Sales Associate"
+            />
+              <Field
                 label="Daily Rate (₱)" name="daily_rate" type="number"
                 value={convertForm.daily_rate}
                 onChange={handleConvertChange}
                 placeholder="e.g. 650"
               />
+
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">Remarks</label>
                 <textarea
