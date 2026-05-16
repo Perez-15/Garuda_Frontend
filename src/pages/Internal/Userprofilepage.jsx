@@ -244,7 +244,7 @@ function LockedField({ field, profile }) {
 // ── Section card ──────────────────────────────────────────────────────────────
 function SectionCard({
   title, fields, profile, editing, onEdit, onSave, onCancel,
-  onFieldChange, formValues, saving, canEditSection, canEditField,
+  onFieldChange, formValues, saving, canEditSection, canEditField, passwordForm, onPasswordChange,
 }) {
   const icon  = SECTION_ICONS[title]  || <FileText className="h-4 w-4" />;
   const color = SECTION_COLORS[title] || 'text-gray-500';
@@ -310,7 +310,39 @@ function SectionCard({
                 </div>
               </div>
             )}
+
+            {title === 'Personal Information' && passwordForm && (
+  <div className="col-span-2 border-t border-gray-100 pt-3 mt-1">
+    <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Change Password</p>
+    <div className="grid grid-cols-2 gap-4">
+      <div className="flex flex-col gap-1">
+        <label className="text-xs font-medium text-gray-400 uppercase tracking-wide">
+          New Password <span className="normal-case text-gray-300">(leave blank to keep)</span>
+        </label>
+        <input
+          type="password"
+          value={passwordForm.password}
+          onChange={(e) => onPasswordChange('password', e.target.value)}
+          placeholder="Min 8 characters"
+          className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        />
+      </div>
+      {passwordForm.password && (
+        <div className="flex flex-col gap-1">
+          <label className="text-xs font-medium text-gray-400 uppercase tracking-wide">Confirm Password</label>
+          <input
+            type="password"
+            value={passwordForm.password_confirmation}
+            onChange={(e) => onPasswordChange('password_confirmation', e.target.value)}
+            className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          />
+        </div>
+      )}
+    </div>
+  </div>
+)}
           </div>
+          
         ) : (
           <div className="divide-y divide-gray-50">
             {fields.map((f) => {
@@ -337,6 +369,7 @@ function SectionCard({
                 </div>
               );
             })}
+            
             {title === 'Employment Details' && (
               <div className="flex items-start justify-between py-2.5 gap-4">
                 <span className="text-sm text-gray-400 w-44 flex-shrink-0">Assigned Branches</span>
@@ -381,6 +414,8 @@ export default function UserProfilePage() {
   const userRole  = currentUser?.roles?.[0]?.name;
   const canManage = userRole === 'super_admin' || userRole === 'hr_admin';
   const isSelf    = currentUser?.id === Number(id);
+
+  const [passwordForm, setPasswordForm] = useState({ password: '', password_confirmation: '' });
 
   // ── Permission helpers ────────────────────────────────────────────────────
 
@@ -473,6 +508,16 @@ export default function UserProfilePage() {
   const saveSection = async (sectionName, fields) => {
     try {
       setSavingSections((s) => ({ ...s, [sectionName]: true }));
+
+       if (sectionName === 'Personal Information' && passwordForm.password) {
+      if (passwordForm.password !== passwordForm.password_confirmation) {
+        showToast('error', 'Passwords do not match.');
+        setSavingSections((s) => ({ ...s, [sectionName]: false }));
+        return;
+      }
+      await userService.update(id, { password: passwordForm.password });
+      setPasswordForm({ password: '', password_confirmation: '' });
+    }
       const form = sectionForms[sectionName] || {};
 
       const fixedPayload  = {};
@@ -708,6 +753,8 @@ export default function UserProfilePage() {
                 }}
                 onSave={() => saveSection(sec.name, sec.fields)}
                 onFieldChange={(fieldKey, value) => handleFieldChange(sec.name, fieldKey, value)}
+                 passwordForm={sec.name === 'Personal Information' ? passwordForm : null}
+                onPasswordChange={(field, val) => setPasswordForm((prev) => ({ ...prev, [field]: val }))}
               />
             ))}
           </div>

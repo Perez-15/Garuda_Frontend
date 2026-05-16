@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  ArrowLeft, Mail, Phone, Building2, FileText,
+  ArrowLeft, Mail, Phone, Building2, FileText, Briefcase,
   Trash2, CheckCircle2, Loader2, Edit2, X, Save,
   User, UserCheck, Archive, Eye, UserPlus, UserX,
 } from 'lucide-react';
@@ -54,7 +54,7 @@ export default function ApplicantDetailPage() {
   // ── Edit state ──────────────────────────────────────────────────────────
   const [isEditing, setIsEditing] = useState(false);
   const [saving, setSaving]       = useState(false);
-  const [editForm, setEditForm]   = useState({ full_name: '', email: '', phone: '', source: '' });
+  const [editForm, setEditForm]   = useState({ full_name: '', email: '', phone: '', source: '', position: '' });
 
   // ── Convert to Employee modal ───────────────────────────────────────────
   const [showConvertModal, setShowConvertModal] = useState(false);
@@ -92,6 +92,7 @@ export default function ApplicantDetailPage() {
       email:     applicant.email    || '',
       phone:     applicant.phone    || '',
       source:    applicant.source   || '',
+      position:  applicant.position || '',
     });
     setIsEditing(true);
   };
@@ -151,6 +152,20 @@ export default function ApplicantDetailPage() {
     }
   };
 
+  const handleJumpToStep = async (stepId) => {
+  if (stepId === applicant.current_step_id) return;
+  try {
+    setMovingStep(true);
+    await applicantService.moveStep(id, 'specific', stepId);
+    fetchApplicant();
+  } catch (error) {
+    console.error('Error setting step:', error);
+    alert('Failed to update step.');
+  } finally {
+    setMovingStep(false);
+  }
+};
+
   const handleStatusChange = async (newStatus) => {
     const labels = {
       pooling:  'Pooling',
@@ -193,7 +208,7 @@ export default function ApplicantDetailPage() {
       setConverting(true);
       const res = await employeeService.convertFromApplicant(id, convertForm);
        console.log('Convert response:', res);        // ← add this
-    console.log('Employee ID:', res.employee?.id); // ← and this
+    console.log('Employee ID:', res.employee?.id); // ← and this  
       setShowConvertModal(false);
       navigate(`/employees/${res.employee.id}`);
     } catch (error) {
@@ -385,6 +400,16 @@ export default function ApplicantDetailPage() {
                       <option value="Referral">Referral</option>
                     </select>
                   </div>
+                  <div>
+  <label className="block text-sm font-medium text-gray-700 mb-1">Position Applied For</label>
+  <input
+    type="text"
+    value={editForm.position}
+    onChange={(e) => setEditForm({ ...editForm, position: e.target.value })}
+    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+    placeholder="e.g. Sales Associate"
+  />
+</div>
                 </form>
            ) : (
   <div className="space-y-3">
@@ -404,6 +429,10 @@ export default function ApplicantDetailPage() {
       <FileText className="h-5 w-5 mr-3 flex-shrink-0" />
       <span>Source: {applicant.source || '—'}</span>
     </div>
+    <div className="flex items-center text-gray-600">
+  <Briefcase className="h-5 w-5 mr-3 flex-shrink-0" />
+  <span>Position: {applicant.position || '—'}</span>
+</div>
 
    {/* Resume */}
     {applicant.resume_url && (
@@ -460,36 +489,59 @@ export default function ApplicantDetailPage() {
               </div>
 
               <div className="space-y-1">
-                {steps.map((step, index) => {
-                  const isCurrent = step.id === applicant.current_step_id;
-                  const isPast    = step.step_order < currentOrder;
-                  return (
-                    <div key={step.id} className="flex items-center gap-3">
-                      <div className="flex flex-col items-center self-stretch">
-                        {index !== 0 && (
-                          <div className={`w-0.5 h-3 ${isPast || isCurrent ? 'bg-green-400' : 'bg-gray-200'}`} />
-                        )}
-                        <div className={`flex-shrink-0 h-9 w-9 rounded-full flex items-center justify-center font-semibold text-sm
-                          ${isCurrent ? 'bg-blue-600 text-white ring-4 ring-blue-100'
-                            : isPast  ? 'bg-green-500 text-white'
-                            : 'bg-gray-100 text-gray-400'}`}>
-                          {isPast ? <CheckCircle2 className="h-5 w-5" /> : index + 1}
-                        </div>
-                        {index !== steps.length - 1 && (
-                          <div className={`w-0.5 flex-1 mt-0.5 ${isPast ? 'bg-green-400' : 'bg-gray-200'}`} />
-                        )}
-                      </div>
-                      <div className={`py-2 flex-1 ${index !== steps.length - 1 ? 'mb-1' : ''}`}>
-                        <p className={`text-sm font-medium ${isCurrent ? 'text-blue-700' : isPast ? 'text-green-700' : 'text-gray-400'}`}>
-                          {step.step_name}
-                        </p>
-                        {isCurrent && <p className="text-xs text-blue-500">Current Step</p>}
-                        {step.is_final_step && <p className="text-xs text-gray-400">Final Step</p>}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+  {steps.map((step, index) => {
+    const isCurrent   = step.id === applicant?.current_step_id;
+    const isPast      = step.step_order < currentOrder;
+    const isClickable = applicant.status === 'active' && canModify && !movingStep && !isCurrent;
+
+    return (
+      <div
+        key={step.id}
+        className={`flex items-center gap-3 ${isClickable ? 'group cursor-pointer' : ''}`}
+        onClick={() => isClickable && handleJumpToStep(step.id)}
+        title={isClickable ? `Jump to "${step.step_name}"` : undefined}
+      >
+        <div className="flex flex-col items-center self-stretch">
+          {index !== 0 && (
+            <div className={`w-0.5 h-3 ${isPast || isCurrent ? 'bg-green-400' : 'bg-gray-200'}`} />
+          )}
+          <div className={`flex-shrink-0 h-9 w-9 rounded-full flex items-center justify-center font-semibold text-sm transition-all
+            ${isCurrent
+              ? 'bg-blue-600 text-white ring-4 ring-blue-100'
+              : isPast
+              ? 'bg-green-500 text-white'
+              : isClickable
+              ? 'bg-gray-100 text-gray-400 group-hover:bg-blue-100 group-hover:text-blue-600 group-hover:ring-2 group-hover:ring-blue-300'
+              : 'bg-gray-100 text-gray-400'}`}>
+            {isPast ? <CheckCircle2 className="h-5 w-5" /> : index + 1}
+          </div>
+          {index !== steps.length - 1 && (
+            <div className={`w-0.5 flex-1 mt-0.5 ${isPast ? 'bg-green-400' : 'bg-gray-200'}`} />
+          )}
+        </div>
+        <div className={`py-2 flex-1 ${index !== steps.length - 1 ? 'mb-1' : ''}`}>
+          <p className={`text-sm font-medium transition-colors
+            ${isCurrent
+              ? 'text-blue-700'
+              : isPast
+              ? 'text-green-700'
+              : isClickable
+              ? 'text-gray-400 group-hover:text-blue-600'
+              : 'text-gray-400'}`}>
+            {step.step_name}
+          </p>
+          {isCurrent && <p className="text-xs text-blue-500">Current Step</p>}
+          {step.is_final_step && <p className="text-xs text-gray-400">Final Step</p>}
+          {isClickable && (
+            <p className="text-xs text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity">
+              Click to jump here
+            </p>
+          )}
+        </div>
+      </div>
+    );
+  })}
+</div>
             </div>
 
             {/* Notes Section */}
@@ -574,7 +626,17 @@ export default function ApplicantDetailPage() {
                 <div className="space-y-2">
                   {canConvert && (
                     <button
-                      onClick={() => setShowConvertModal(true)}
+                      onClick={() => {
+  setConvertForm({
+    date_hired: '',
+    daily_rate: '',
+    remarks: '',
+    position: applicant.position || '',
+  });
+
+  setConvertError('');
+  setShowConvertModal(true);
+}}
                       className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-medium shadow-sm"
                     >
                       <UserCheck className="h-4 w-4" />
